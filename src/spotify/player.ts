@@ -42,7 +42,7 @@ function loadSdk(): Promise<void> {
   return sdkLoaded;
 }
 
-/** Turns this browser tab into a Spotify Connect device named "Spotify Swipe". */
+/** Turns this browser tab into a Spotify Connect device named "Swipify". */
 export function createWebPlayer(getToken: () => Promise<string>): WebPlayer {
   const listeners = new Set<() => void>();
   let player: Spotify.Player | null = null;
@@ -67,7 +67,7 @@ export function createWebPlayer(getToken: () => Promise<string>): WebPlayer {
   loadSdk().then(
     () => {
       player = new window.Spotify.Player({
-        name: 'Spotify Swipe',
+        name: 'Swipify',
         volume: 0.8,
         getOAuthToken: (callback) => {
           getToken().then(callback, () => update({ error: 'Your Spotify login expired — please reconnect.' }));

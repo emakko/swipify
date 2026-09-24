@@ -17,6 +17,7 @@ export interface HistoryStore {
   remove(playlistId: string, uri: string): void;
 }
 
+// Keys keep the app's old name so existing logins and History survive the rename to Swipify.
 const storageKey = (playlistId: string) => `spotify-swipe:history:${playlistId}`;
 
 /**

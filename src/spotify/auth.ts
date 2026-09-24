@@ -17,6 +17,7 @@ export const SCOPES = [
 
 const AUTHORIZE_URL = 'https://accounts.spotify.com/authorize';
 const TOKEN_URL = 'https://accounts.spotify.com/api/token';
+// Keys keep the app's old name so existing logins and History survive the rename to Swipify.
 const TOKENS_KEY = 'spotify-swipe:tokens';
 const VERIFIER_KEY = 'spotify-swipe:verifier';
 const STATE_KEY = 'spotify-swipe:state';

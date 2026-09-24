@@ -7,7 +7,7 @@ interface Props {
 export function ConnectScreen({ clientIdMissing, error, onConnect }: Props) {
   return (
     <main className="center">
-      <h1>Spotify Swipe</h1>
+      <h1>Swipify</h1>
       <p className="muted">Swipe through a playlist. Right keeps a song, left removes it.</p>
       {clientIdMissing ? (
         <p className="error">
