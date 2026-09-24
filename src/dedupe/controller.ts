@@ -246,7 +246,7 @@ export function createDedupeRun(deps: DedupeDeps): DedupeController {
             update({ done: snapshot.done + 1 });
           }
         } catch (error) {
-          update(before);
+          update({ ...before, failedName: null });
           throw error;
         }
         update({ phase: 'undone' });

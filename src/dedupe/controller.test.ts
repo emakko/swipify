@@ -212,6 +212,20 @@ describe('createDedupeRun', () => {
     expect(spotify.rows).toEqual(PLAYLIST);
   });
 
+  it('clears failedName when undo itself fails, so the error is not blamed on the earlier song', async () => {
+    const { spotify, controller, ops } = setup();
+    spotify.api.addItems
+      .mockRejectedValueOnce(new TypeError('offline')) // the re-add
+      .mockRejectedValueOnce(new TypeError('offline')); // the first undo insert
+    controller.start(ops);
+    await controller.idle();
+    controller.undo();
+    await controller.idle();
+    const snap = controller.getSnapshot();
+    expect(snap).toMatchObject({ phase: 'partial', failedName: null });
+    expect(snap.error).toContain('Network error');
+  });
+
   it('undo fails partway, then retry finishes without redoing the completed row', async () => {
     const { spotify, controller, ops } = setup();
     let call = 0;

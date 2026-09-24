@@ -151,7 +151,7 @@ function DedupeView({
           onClose={() => setShowHistory(false)}
         />
       )}
-      {snap.error && snap.phase !== 'partial' && (
+      {snap.error && !(snap.phase === 'partial' && snap.failedName) && (
         <Toast message={snap.error} onDismiss={() => controller.dismissError()} />
       )}
     </>
@@ -162,7 +162,7 @@ function DedupeView({
     const extraCopies = found.exact.reduce((count, e) => count + e.remove.length, 0);
     return (
       <main className="dedupe">
-        <button className="link" onClick={onExit}>
+        <button className="link" onClick={onExit} disabled={snap.busy}>
           ← Playlists
         </button>
         <h1>{playlist.name}</h1>
@@ -247,6 +247,9 @@ function DedupeView({
     const percent = snap.total ? Math.round((snap.done / snap.total) * 100) : 0;
     return (
       <main className="center">
+        <button className="link" onClick={onExit} disabled>
+          ← Playlists
+        </button>
         <h2>{snap.phase === 'removing' ? 'Removing duplicates…' : 'Putting duplicates back…'}</h2>
         <div className="progress">
           <div style={{ width: `${percent}%` }} />
@@ -264,13 +267,10 @@ function DedupeView({
   return (
     <main className="center">
       <h2>{partial ? `Removed ${snap.done} of ${snap.total}` : `Removed ${duplicates(snap.done)}`}</h2>
-      {partial ? (
-        <>
-          <p className="error-box">
-            Couldn't remove “{snap.failedName}”: {snap.error}
-          </p>
-          <p className="muted">Nothing was lost: Undo puts back everything removed so far.</p>
-        </>
+      {partial && snap.failedName ? (
+        <p className="error-box">
+          Couldn't remove “{snap.failedName}”: {snap.error?.replace(/\.$/, '')}. Nothing was lost.
+        </p>
       ) : (
         <p className="muted">
           {playlist.name} now has {snap.length} songs.
