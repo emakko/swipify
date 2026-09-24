@@ -11,6 +11,8 @@ export const SCOPES = [
   'user-read-email',
   'user-read-playback-state',
   'user-modify-playback-state',
+  'user-library-read',
+  'user-library-modify',
 ];
 
 const AUTHORIZE_URL = 'https://accounts.spotify.com/authorize';
@@ -25,6 +27,8 @@ interface Tokens {
   accessToken: string;
   refreshToken: string;
   expiresAt: number;
+  /** Scopes requested at login; a login made before a scope was added must be redone. */
+  scopes?: string[];
 }
 
 interface TokenResponse {
@@ -44,6 +48,8 @@ export interface AuthDeps {
 
 export interface Auth {
   isLoggedIn(): boolean;
+  /** Tokens exist, but from a login that did not ask for every scope the app now needs. */
+  needsNewScopes(): boolean;
   login(): Promise<void>;
   handleCallback(search: string): Promise<void>;
   getAccessToken(): Promise<string>;
@@ -65,11 +71,12 @@ export function createAuth(deps: AuthDeps): Auth {
     }
   }
 
-  function saveTokens(response: TokenResponse, previousRefreshToken = ''): Tokens {
+  function saveTokens(response: TokenResponse, previous?: Tokens): Tokens {
     const tokens: Tokens = {
       accessToken: response.access_token,
-      refreshToken: response.refresh_token ?? previousRefreshToken,
+      refreshToken: response.refresh_token ?? previous?.refreshToken ?? '',
       expiresAt: deps.now() + response.expires_in * 1000,
+      scopes: previous ? previous.scopes : SCOPES,
     };
     storage.setItem(TOKENS_KEY, JSON.stringify(tokens));
     return tokens;
@@ -94,7 +101,7 @@ export function createAuth(deps: AuthDeps): Auth {
       if (!tokens?.refreshToken) throw new AuthError('Not logged in');
       try {
         const response = await requestToken({ grant_type: 'refresh_token', refresh_token: tokens.refreshToken });
-        return saveTokens(response, tokens.refreshToken).accessToken;
+        return saveTokens(response, tokens).accessToken;
       } catch (error) {
         // Only a rejected refresh token means the login is gone; network errors are retryable.
         if (error instanceof AuthError) storage.removeItem(TOKENS_KEY);
@@ -106,8 +113,20 @@ export function createAuth(deps: AuthDeps): Auth {
     return refreshing;
   }
 
+  function hasAllScopes(tokens: Tokens): boolean {
+    return SCOPES.every((scope) => tokens.scopes?.includes(scope));
+  }
+
   return {
-    isLoggedIn: () => readTokens() !== null,
+    isLoggedIn() {
+      const tokens = readTokens();
+      return tokens !== null && hasAllScopes(tokens);
+    },
+
+    needsNewScopes() {
+      const tokens = readTokens();
+      return tokens !== null && !hasAllScopes(tokens);
+    },
 
     async login() {
       const verifier = generateVerifier();

@@ -25,7 +25,10 @@ function setup() {
 }
 
 const storeTokens = (storage: Storage, expiresAt: number) =>
-  storage.setItem(TOKENS_KEY, JSON.stringify({ accessToken: 'old-access', refreshToken: 'old-refresh', expiresAt }));
+  storage.setItem(
+    TOKENS_KEY,
+    JSON.stringify({ accessToken: 'old-access', refreshToken: 'old-refresh', expiresAt, scopes: SCOPES }),
+  );
 
 const formBody = (call: Parameters<typeof fetch>) => new URLSearchParams(String(call[1]?.body));
 
@@ -54,6 +57,7 @@ describe('getAccessToken', () => {
       accessToken: 'new-access',
       refreshToken: 'new-refresh',
       expiresAt: NOW + 3_600_000,
+      scopes: SCOPES,
     });
   });
 
@@ -145,5 +149,41 @@ describe('login and callback', () => {
     storeTokens(storage, NOW + 3_600_000);
     auth.logout();
     expect(auth.isLoggedIn()).toBe(false);
+  });
+});
+
+describe('scopes', () => {
+  it('requests Liked Songs access', () => {
+    expect(SCOPES).toEqual(expect.arrayContaining(['user-library-read', 'user-library-modify']));
+  });
+
+  it('treats a login made before a scope was added as logged out', () => {
+    const { auth, storage } = setup();
+    storage.setItem(
+      TOKENS_KEY,
+      JSON.stringify({ accessToken: 'a', refreshToken: 'r', expiresAt: NOW + 3_600_000, scopes: ['streaming'] }),
+    );
+    expect(auth.isLoggedIn()).toBe(false);
+    expect(auth.needsNewScopes()).toBe(true);
+  });
+
+  it('treats a login without a stored scope list as needing new scopes', () => {
+    const { auth, storage } = setup();
+    storage.setItem(TOKENS_KEY, JSON.stringify({ accessToken: 'a', refreshToken: 'r', expiresAt: NOW + 3_600_000 }));
+    expect(auth.isLoggedIn()).toBe(false);
+    expect(auth.needsNewScopes()).toBe(true);
+  });
+
+  it('does not ask for new scopes when nobody is logged in', () => {
+    const { auth } = setup();
+    expect(auth.needsNewScopes()).toBe(false);
+  });
+
+  it('keeps the scope list across a refresh', async () => {
+    const { auth, storage, fetchMock } = setup();
+    storeTokens(storage, NOW);
+    fetchMock.mockResolvedValueOnce(json({ access_token: 'new-access', expires_in: 3600 }));
+    await auth.getAccessToken();
+    expect(auth.isLoggedIn()).toBe(true);
   });
 });
