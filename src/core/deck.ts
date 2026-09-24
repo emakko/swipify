@@ -6,6 +6,8 @@ export interface RawItem {
   is_playable?: boolean;
   artists?: { name: string }[];
   album?: { name: string; images?: { url: string }[] };
+  /** Present when Spotify substituted this track; the original (playlist) URI. */
+  linked_from?: { uri: string } | null;
 }
 
 export interface RawPlaylistRow {
@@ -23,6 +25,8 @@ export interface Card {
   isPlayable: boolean;
   /** Every 0-based index at which this song appears in the playlist. */
   positions: number[];
+  /** URI to play; may differ from `uri` when Spotify relinks the track. */
+  playUri: string;
 }
 
 export interface Deck {
@@ -43,13 +47,16 @@ export function buildDeck(rows: RawPlaylistRow[], random: () => number = Math.ra
       skipped++;
       return;
     }
-    const existing = byUri.get(item.uri);
+    // Spotify may relink an unavailable track to a substitute; the playlist row (and
+    // every playlist-editing call) still needs the original URI, from `linked_from`.
+    const uri = item.linked_from?.uri ?? item.uri;
+    const existing = byUri.get(uri);
     if (existing) {
       existing.positions.push(index);
       return;
     }
-    byUri.set(item.uri, {
-      uri: item.uri,
+    byUri.set(uri, {
+      uri,
       name: item.name,
       artists: (item.artists ?? []).map((artist) => artist.name),
       album: item.album?.name ?? '',
@@ -57,6 +64,7 @@ export function buildDeck(rows: RawPlaylistRow[], random: () => number = Math.ra
       durationMs: item.duration_ms,
       isPlayable: item.is_playable !== false,
       positions: [index],
+      playUri: item.uri,
     });
   });
 

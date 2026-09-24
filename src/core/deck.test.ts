@@ -32,6 +32,7 @@ describe('buildDeck', () => {
         durationMs: 200_000,
         isPlayable: true,
         positions: [0],
+        playUri: 'spotify:track:a',
       },
     ]);
     expect(deck.skipped).toBe(0);
@@ -85,6 +86,29 @@ describe('buildDeck', () => {
 
   it('handles an empty playlist', () => {
     expect(buildDeck([], keepOrder)).toEqual({ cards: [], skipped: 0, totalRows: 0 });
+  });
+
+  it('uses linked_from as the playlist URI and keeps the row URI as playUri', () => {
+    const deck = buildDeck(
+      [track('spotify:track:substitute', { linked_from: { uri: 'spotify:track:original' } })],
+      keepOrder,
+    );
+    expect(deck.cards).toHaveLength(1);
+    expect(deck.cards[0].uri).toBe('spotify:track:original');
+    expect(deck.cards[0].playUri).toBe('spotify:track:substitute');
+  });
+
+  it('merges a relinked row with a non-relinked row sharing the same original URI', () => {
+    const rows: RawPlaylistRow[] = [
+      track('spotify:track:original'),
+      track('spotify:track:substitute', { linked_from: { uri: 'spotify:track:original' } }),
+    ];
+    const deck = buildDeck(rows, keepOrder);
+    expect(deck.cards).toHaveLength(1);
+    expect(deck.cards[0]).toMatchObject({
+      uri: 'spotify:track:original',
+      positions: [0, 1],
+    });
   });
 });
 

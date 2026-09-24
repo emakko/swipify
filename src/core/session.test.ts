@@ -18,6 +18,7 @@ const card = (uri: string): Card => ({
   durationMs: 1000,
   isPlayable: true,
   positions: [0],
+  playUri: uri,
 });
 
 const start = () => initialSession([card('a'), card('b'), card('c')]);

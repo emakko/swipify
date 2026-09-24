@@ -15,6 +15,7 @@ const card = (uri: string, positions: number[]): Card => ({
   durationMs: 1000,
   isPlayable: true,
   positions,
+  playUri: uri,
 });
 
 // Playlist rows: 0=a, 1=b, 2=c, 3=<local file>, 4=c (duplicate). Deck order: a, b, c.

@@ -32,7 +32,7 @@ export function useCardPlayback(
   onError: (error: unknown) => void,
 ) {
   const snap = usePlayerSnapshot(player);
-  const uri = card?.uri ?? null;
+  const playUri = card?.playUri ?? null;
   const playable = card?.isPlayable ?? false;
   const onErrorRef = useRef(onError);
   onErrorRef.current = onError;
@@ -40,22 +40,22 @@ export function useCardPlayback(
 
   useEffect(() => {
     if (!started || !snap.deviceId) return;
-    if (!uri || !playable) {
+    if (!playUri || !playable) {
       void player.pause();
       return;
     }
-    playWithRetry(api, snap.deviceId, uri).catch((error: unknown) => onErrorRef.current(error));
-  }, [started, snap.deviceId, uri, playable, player, api]);
+    playWithRetry(api, snap.deviceId, playUri).catch((error: unknown) => onErrorRef.current(error));
+  }, [started, snap.deviceId, playUri, playable, player, api]);
 
   useEffect(() => {
     // Our song was playing and Spotify moved on by itself: stop and wait for a swipe.
-    if (lastSeenUri.current === uri && snap.trackUri !== uri && !snap.paused) void player.pause();
+    if (lastSeenUri.current === playUri && snap.trackUri !== playUri && !snap.paused) void player.pause();
     lastSeenUri.current = snap.trackUri;
-  }, [snap.trackUri, snap.paused, uri, player]);
+  }, [snap.trackUri, snap.paused, playUri, player]);
 
   const resumeHere = () => {
-    if (!snap.deviceId || !uri) return;
-    playWithRetry(api, snap.deviceId, uri, snap.positionMs).catch((error: unknown) => onErrorRef.current(error));
+    if (!snap.deviceId || !playUri) return;
+    playWithRetry(api, snap.deviceId, playUri, snap.positionMs).catch((error: unknown) => onErrorRef.current(error));
   };
 
   return { snap, resumeHere };
