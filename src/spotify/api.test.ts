@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { LIKED_SONGS_ID } from '../core/playlists';
 import { createApi } from './api';
 import { ApiError, AuthError } from './errors';
 
@@ -151,5 +152,46 @@ describe('createApi', () => {
     expect(call[0]).toBe(`${BASE}/me/player/play?device_id=dev1`);
     expect(call[1]?.method).toBe('PUT');
     expect(sentBody(call)).toEqual({ uris: ['spotify:track:a'], position_ms: 5000 });
+  });
+  it('loads Liked Songs from /me/tracks as playlist rows', async () => {
+    const { api, fetchMock } = setup();
+    const nextUrl = `${BASE}/me/tracks?offset=50&limit=50&market=from_token`;
+    fetchMock
+      .mockResolvedValueOnce(json({ items: [{ added_at: 't', track: trackItem('spotify:track:a') }], next: nextUrl }))
+      .mockResolvedValueOnce(json({ items: [{ added_at: 't', track: trackItem('spotify:track:b') }], next: null }));
+
+    expect(await api.getPlaylistItems(LIKED_SONGS_ID)).toEqual([
+      { is_local: false, item: trackItem('spotify:track:a') },
+      { is_local: false, item: trackItem('spotify:track:b') },
+    ]);
+    expect(fetchMock.mock.calls[0][0]).toBe(`${BASE}/me/tracks?limit=50&market=from_token`);
+    expect(fetchMock.mock.calls[1][0]).toBe(nextUrl);
+  });
+
+  it('un-likes a song with DELETE /me/library and the URI in the query', async () => {
+    const { api, fetchMock } = setup();
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 200 }));
+    await api.removeItems(LIKED_SONGS_ID, ['spotify:track:a']);
+    const call = fetchMock.mock.calls[0];
+    expect(call[0]).toBe(`${BASE}/me/library?uris=spotify%3Atrack%3Aa`);
+    expect(call[1]?.method).toBe('DELETE');
+    expect(call[1]?.body).toBeUndefined();
+  });
+
+  it('re-likes a song with PUT /me/library, ignoring the position', async () => {
+    const { api, fetchMock } = setup();
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 200 }));
+    await api.addItems(LIKED_SONGS_ID, ['spotify:track:a'], 7);
+    const call = fetchMock.mock.calls[0];
+    expect(call[0]).toBe(`${BASE}/me/library?uris=spotify%3Atrack%3Aa`);
+    expect(call[1]?.method).toBe('PUT');
+    expect(call[1]?.body).toBeUndefined();
+  });
+
+  it('reads the Liked Songs count from a one-item page', async () => {
+    const { api, fetchMock } = setup();
+    fetchMock.mockResolvedValueOnce(json({ items: [], next: null, total: 842 }));
+    expect(await api.getLikedSongsTotal()).toBe(842);
+    expect(fetchMock.mock.calls[0][0]).toBe(`${BASE}/me/tracks?limit=1`);
   });
 });

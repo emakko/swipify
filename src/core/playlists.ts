@@ -1,3 +1,9 @@
+/**
+ * Stands in for the user's Liked Songs, which Spotify stores as a library rather than a
+ * playlist. Real playlist IDs are 22 base-62 characters, so this can never collide.
+ */
+export const LIKED_SONGS_ID = 'liked';
+
 export interface PlaylistSummary {
   id: string;
   name: string;

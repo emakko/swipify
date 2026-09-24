@@ -1,5 +1,5 @@
 import type { RawItem, RawPlaylistRow } from '../core/deck';
-import type { PlaylistSummary } from '../core/playlists';
+import { LIKED_SONGS_ID, type PlaylistSummary } from '../core/playlists';
 import { ApiError, AuthError } from './errors';
 
 const BASE = 'https://api.spotify.com/v1';
@@ -15,6 +15,8 @@ export interface ApiDeps {
 export interface SpotifyApi {
   getMe(): Promise<{ id: string; displayName: string | null }>;
   getMyPlaylists(): Promise<PlaylistSummary[]>;
+  getLikedSongsTotal(): Promise<number>;
+  /** `LIKED_SONGS_ID` reads, un-likes and re-likes Liked Songs instead of a playlist. */
   getPlaylistItems(playlistId: string): Promise<RawPlaylistRow[]>;
   removeItems(playlistId: string, uris: string[]): Promise<void>;
   addItems(playlistId: string, uris: string[], position: number): Promise<void>;
@@ -24,6 +26,7 @@ export interface SpotifyApi {
 interface Page<T> {
   items: T[];
   next: string | null;
+  total?: number;
 }
 
 interface RawPlaylist {
@@ -97,6 +100,8 @@ export function createApi(deps: ApiDeps): SpotifyApi {
   }
 
   const playlistPath = (playlistId: string) => `/playlists/${encodeURIComponent(playlistId)}/items`;
+  // Spotify takes library URIs in the query string, not the body.
+  const libraryPath = (uris: string[]) => `/me/library?uris=${uris.map(encodeURIComponent).join(',')}`;
 
   return {
     async getMe() {
@@ -116,7 +121,16 @@ export function createApi(deps: ApiDeps): SpotifyApi {
       }));
     },
 
+    async getLikedSongsTotal() {
+      const page = await request<Page<unknown>>('GET', '/me/tracks?limit=1');
+      return page.total ?? 0;
+    },
+
     async getPlaylistItems(playlistId) {
+      if (playlistId === LIKED_SONGS_ID) {
+        const saved = await getAll<{ track: RawItem | null }>('/me/tracks?limit=50&market=from_token');
+        return saved.map((row) => ({ is_local: false, item: row.track }));
+      }
       const rows = await getAll<RawRow>(
         `${playlistPath(playlistId)}?limit=50&market=from_token&additional_types=track,episode`,
       );
@@ -124,10 +138,19 @@ export function createApi(deps: ApiDeps): SpotifyApi {
     },
 
     async removeItems(playlistId, uris) {
+      if (playlistId === LIKED_SONGS_ID) {
+        await request('DELETE', libraryPath(uris));
+        return;
+      }
       await request('DELETE', playlistPath(playlistId), { items: uris.map((uri) => ({ uri })) });
     },
 
     async addItems(playlistId, uris, position) {
+      // Liked Songs has no positions: a re-liked song goes to the top.
+      if (playlistId === LIKED_SONGS_ID) {
+        await request('PUT', libraryPath(uris));
+        return;
+      }
       await request('POST', playlistPath(playlistId), { uris, position });
     },
 
