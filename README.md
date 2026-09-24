@@ -1,4 +1,4 @@
-<p align="center"><img src="public/favicon.png" alt="Swipify icon" width="128" height="128"></p>
+<p align="center"><img src="docs/banner.png" alt="Swipify: swipe right to keep, left to remove."></p>
 
 # Swipify
 
