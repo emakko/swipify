@@ -24,6 +24,22 @@ button.link:hover { color: var(--text); }
 .error { color: var(--red); }
 .center { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1rem; padding: 1rem; text-align: center; }
 .row { display: flex; gap: 0.75rem; justify-content: center; }
+.loading { display: flex; flex-direction: column; align-items: center; gap: 0.9rem; padding: 1.5rem 0; color: var(--muted); }
+.eq { display: flex; align-items: flex-end; gap: 4px; height: 28px; }
+.eq span { width: 6px; height: 100%; border-radius: 3px; background: var(--green); transform-origin: bottom; animation: eq 1s ease-in-out infinite; }
+.eq span:nth-child(2) { animation-duration: 0.8s; animation-delay: -0.4s; }
+.eq span:nth-child(3) { animation-duration: 1.1s; animation-delay: -0.2s; }
+.eq span:nth-child(4) { animation-duration: 0.9s; animation-delay: -0.6s; }
+@keyframes eq {
+  0%, 100% { transform: scaleY(0.3); }
+  50% { transform: scaleY(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .eq span { animation: none; transform: scaleY(0.5); }
+  .eq span:nth-child(2) { transform: scaleY(0.9); }
+  .eq span:nth-child(3) { transform: scaleY(0.4); }
+  .eq span:nth-child(4) { transform: scaleY(0.7); }
+}
 
 /* Playlist picker */
 .picker { max-width: 1100px; margin: 0 auto; padding: 1.5rem; }

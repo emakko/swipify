@@ -8,6 +8,7 @@ import { useSnapshot } from '../hooks/useSnapshot';
 import type { SpotifyApi } from '../spotify/api';
 import { AuthError, describeError } from '../spotify/errors';
 import { HistoryPanel } from './HistoryPanel';
+import { Loading } from './Loading';
 import { Toast } from './Toast';
 
 interface Props {
@@ -76,7 +77,12 @@ export function DedupeScreen(props: Props) {
       </main>
     );
   }
-  if (!loaded) return <main className="center muted">Loading songs…</main>;
+  if (!loaded)
+    return (
+      <main className="center">
+        <Loading>Loading songs…</Loading>
+      </main>
+    );
   return (
     <DedupeView
       key={loaded.runId}
