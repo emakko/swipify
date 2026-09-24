@@ -48,7 +48,13 @@ export function createApi(deps: ApiDeps): SpotifyApi {
   const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
 
   async function request<T>(method: string, pathOrUrl: string, body?: unknown): Promise<T> {
-    const url = pathOrUrl.startsWith('https://') ? pathOrUrl : BASE + pathOrUrl;
+    const isAbsolute = pathOrUrl.startsWith('https://');
+    if (isAbsolute && !pathOrUrl.startsWith(BASE)) {
+      // Never send the bearer token to a host other than Spotify's API — a paginated
+      // `next` link is server-supplied and must not be trusted blindly.
+      throw new ApiError(0, 'Unexpected URL from Spotify');
+    }
+    const url = isAbsolute ? pathOrUrl : BASE + pathOrUrl;
     let token = await deps.getAccessToken();
     let refreshed = false;
 

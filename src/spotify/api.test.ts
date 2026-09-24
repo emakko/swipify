@@ -93,6 +93,18 @@ describe('createApi', () => {
     expect(fetchMock.mock.calls[1][0]).toBe(nextUrl);
   });
 
+  it('refuses to follow a pagination link that points outside the Spotify API', async () => {
+    const { api, fetchMock } = setup();
+    const evilNext = 'https://evil.example.com/steal-token';
+    fetchMock.mockResolvedValueOnce(
+      json({ items: [{ is_local: false, item: trackItem('spotify:track:a') }], next: evilNext }),
+    );
+    const error = await api.getPlaylistItems('p1').catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error).toMatchObject({ status: 0, message: 'Unexpected URL from Spotify' });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it('maps playlists using items.total, falling back to tracks.total', async () => {
     const { api, fetchMock } = setup();
     fetchMock.mockResolvedValueOnce(
