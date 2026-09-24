@@ -12,6 +12,7 @@ import { AuthError, describeError } from '../spotify/errors';
 import type { WebPlayer } from '../spotify/player';
 import { DoneScreen } from './DoneScreen';
 import { HistoryPanel } from './HistoryPanel';
+import { Loading } from './Loading';
 import { PlayerControls } from './PlayerControls';
 import { SwipeCard, type SwipeDirection } from './SwipeCard';
 import { Toast } from './Toast';
@@ -63,7 +64,12 @@ export function SwipeScreen(props: Props) {
       </main>
     );
   }
-  if (!loaded) return <main className="center muted">Loading songs…</main>;
+  if (!loaded)
+    return (
+      <main className="center">
+        <Loading>Loading songs…</Loading>
+      </main>
+    );
   return <SwipeView {...props} controller={loaded.controller} sessionId={loaded.sessionId} />;
 }
 

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ConnectScreen } from './components/ConnectScreen';
 import { DedupeScreen } from './components/DedupeScreen';
+import { Loading } from './components/Loading';
 import { PlaylistPicker, type Mode } from './components/PlaylistPicker';
 import { SwipeScreen } from './components/SwipeScreen';
 import { createHistoryStore } from './core/historyStore';
@@ -101,7 +102,11 @@ export function App() {
 
   switch (screen.name) {
     case 'loading':
-      return <main className="center muted">Connecting to Spotify…</main>;
+      return (
+        <main className="center">
+          <Loading>Connecting to Spotify…</Loading>
+        </main>
+      );
     case 'connect':
       return <ConnectScreen clientIdMissing={!CLIENT_ID} error={screen.error} onConnect={() => void auth.login()} />;
     case 'picker':

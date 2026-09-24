@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { editablePlaylists, LIKED_SONGS_ID, type PlaylistSummary } from '../core/playlists';
 import type { SpotifyApi } from '../spotify/api';
 import { AuthError, describeError } from '../spotify/errors';
+import { Loading } from './Loading';
 
 export type Mode = 'swipe' | 'dedupe';
 
@@ -84,7 +85,7 @@ export function PlaylistPicker({ api, mode, onModeChange, onPick, onAuthLost, on
           {error} <button onClick={() => setAttempt((n) => n + 1)}>Retry</button>
         </p>
       )}
-      {!error && !playlists && <p className="muted">Loading your playlists…</p>}
+      {!error && !playlists && <Loading>Loading your playlists…</Loading>}
       {playlists?.length === 0 && <p className="muted">You don't own or collaborate on any playlists yet.</p>}
       {playlists && (
         <div className="grid">
