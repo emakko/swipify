@@ -1,6 +1,8 @@
 # Swipify
 
 Tinder for your playlists: songs play in random order; swipe right to keep, left to remove.
+Switch to **Remove duplicates** at the top of the playlist list to clear out songs that are in a
+playlist twice, or once as a single and once from the album.
 
 <!-- Add a screenshot or GIF of the swipe screen at docs/screenshot.png -->
 ![Swipify swipe screen](docs/screenshot.png)
@@ -55,6 +57,10 @@ Open **http://127.0.0.1:5173** (not `localhost` — Spotify rejects it) and clic
   "date added" can't be kept.
 - If you logged in before Liked Songs support was added, the app asks you to reconnect once so
   Spotify can grant the extra permissions.
+- **Remove duplicates** keeps the copy highest in the playlist. Everything starts ticked — untick
+  what you want to keep. "Same song, other release" means the same title and artists on a
+  different track (single vs. album, remaster). Undo on the result screen puts everything back;
+  other-release removals can also be restored later from History, exact copies can't.
 
 ## Troubleshooting
 
