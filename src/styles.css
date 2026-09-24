@@ -30,9 +30,13 @@ button.link:hover { color: var(--text); }
 .picker header { display: flex; justify-content: space-between; align-items: center; }
 .picker .heading { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
 .picker .mode-hint { margin: 0.25rem 0 1rem; }
-.seg { display: inline-flex; padding: 3px; border-radius: 999px; background: var(--surface); }
-.seg button { padding: 0.35rem 0.9rem; background: none; color: var(--muted); }
-.seg button.on { background: var(--text); color: #000; font-weight: 700; }
+.seg { position: relative; display: inline-flex; padding: 3px; border-radius: 999px; background: var(--surface); }
+.seg-pill { position: absolute; top: 3px; bottom: 3px; left: 0; border-radius: 999px; background: var(--text); transition: transform 0.25s ease-out, width 0.25s ease-out; }
+.seg button { position: relative; padding: 0.35rem 0.9rem; background: none; color: var(--muted); transition: color 0.25s ease-out; }
+.seg button.on { color: #000; font-weight: 700; }
+@media (prefers-reduced-motion: reduce) {
+  .seg-pill, .seg button { transition: none; }
+}
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 1rem; }
 .tile { display: flex; flex-direction: column; gap: 0.5rem; padding: 0.75rem; border-radius: var(--radius); background: var(--surface); text-align: left; }
 .tile:hover { background: var(--surface-2); }

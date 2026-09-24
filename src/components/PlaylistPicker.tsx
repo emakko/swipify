@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { editablePlaylists, LIKED_SONGS_ID, type PlaylistSummary } from '../core/playlists';
 import type { SpotifyApi } from '../spotify/api';
 import { AuthError, describeError } from '../spotify/errors';
@@ -24,6 +24,14 @@ export function PlaylistPicker({ api, mode, onModeChange, onPick, onAuthLost, on
   const [likedTotal, setLikedTotal] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
+  const segRef = useRef<HTMLDivElement>(null);
+  const [pill, setPill] = useState<{ left: number; width: number } | null>(null);
+
+  // Slide the highlight under the active mode. It first renders already in place, so it only animates on a switch.
+  useLayoutEffect(() => {
+    const active = segRef.current?.querySelector<HTMLElement>('button.on');
+    if (active) setPill({ left: active.offsetLeft, width: active.offsetWidth });
+  }, [mode]);
 
   useEffect(() => {
     let cancelled = false;
@@ -65,7 +73,8 @@ export function PlaylistPicker({ api, mode, onModeChange, onPick, onAuthLost, on
       <header>
         <div className="heading">
           <h1>Pick a playlist</h1>
-          <div className="seg" role="group" aria-label="Mode">
+          <div className="seg" role="group" aria-label="Mode" ref={segRef}>
+            {pill && <span className="seg-pill" aria-hidden="true" style={{ width: pill.width, transform: `translateX(${pill.left}px)` }} />}
             <button className={mode === 'swipe' ? 'on' : ''} aria-pressed={mode === 'swipe'} onClick={() => onModeChange('swipe')}>
               Swipe
             </button>
