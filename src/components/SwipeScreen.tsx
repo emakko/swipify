@@ -110,7 +110,10 @@ function SwipeView({
       else if (e.key === 'ArrowLeft') swipe('remove');
       else if (e.key === ' ') {
         e.preventDefault();
-        void player.togglePlay();
+        // Only the current card's own playback should toggle: on an unplayable card or
+        // the Done screen the SDK still holds the previous track, so togglePlay would
+        // resume that instead.
+        if (card?.isPlayable) void player.togglePlay();
       } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
         e.preventDefault();
         controller.undo();
@@ -118,7 +121,7 @@ function SwipeView({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [started, swipe, player, controller]);
+  }, [started, swipe, player, controller, card]);
 
   const dismissError = useCallback(() => {
     controller.dismissError();
