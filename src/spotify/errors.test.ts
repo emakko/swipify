@@ -7,7 +7,7 @@ describe('describeError', () => {
     expect(describeError(new ApiError(403, 'Forbidden'))).toMatch(/permission/);
     expect(describeError(new ApiError(404, 'Not found'))).toMatch(/could not find/);
     expect(describeError(new ApiError(500, 'Boom'))).toBe('Spotify error 500: Boom');
-    expect(describeError(new TypeError('Failed to fetch'))).toMatch(/Network error/);
+    expect(describeError(new TypeError('Failed to fetch'))).toBe('Network error — check your connection. (Failed to fetch)');
     expect(describeError('weird')).toBe('weird');
   });
 });

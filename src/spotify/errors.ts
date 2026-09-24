@@ -24,6 +24,6 @@ export function describeError(error: unknown): string {
     if (error.status === 404) return 'Spotify could not find that playlist, song or player.';
     return `Spotify error ${error.status}: ${error.message}`;
   }
-  if (error instanceof TypeError) return 'Network error — check your connection.';
+  if (error instanceof TypeError) return `Network error — check your connection. (${error.message})`;
   return error instanceof Error ? error.message : String(error);
 }
