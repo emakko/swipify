@@ -3,11 +3,13 @@ import type { RemovedEntry } from '../core/historyStore';
 interface Props {
   entries: RemovedEntry[];
   sessionId: string;
+  /** Shown above the list, e.g. how Restore behaves for this playlist. */
+  note?: string;
   onRestore: (uri: string) => void;
   onClose: () => void;
 }
 
-export function HistoryPanel({ entries, sessionId, onRestore, onClose }: Props) {
+export function HistoryPanel({ entries, sessionId, note, onRestore, onClose }: Props) {
   return (
     <aside className="history" aria-label="Removed songs">
       <header>
@@ -16,6 +18,7 @@ export function HistoryPanel({ entries, sessionId, onRestore, onClose }: Props) 
           ✕
         </button>
       </header>
+      {note && <p className="muted">{note}</p>}
       {entries.length === 0 ? (
         <p className="muted">Nothing removed yet.</p>
       ) : (

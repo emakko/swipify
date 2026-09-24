@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { editablePlaylists, type PlaylistSummary } from '../core/playlists';
+import { editablePlaylists, LIKED_SONGS_ID, type PlaylistSummary } from '../core/playlists';
 import type { SpotifyApi } from '../spotify/api';
 import { AuthError, describeError } from '../spotify/errors';
 
@@ -12,6 +12,7 @@ interface Props {
 
 export function PlaylistPicker({ api, onPick, onAuthLost, onLogout }: Props) {
   const [playlists, setPlaylists] = useState<PlaylistSummary[] | null>(null);
+  const [likedTotal, setLikedTotal] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
 
@@ -28,11 +29,27 @@ export function PlaylistPicker({ api, onPick, onAuthLost, onLogout }: Props) {
         else setError(describeError(e));
       },
     );
+    // Only the count; if it fails, opening Liked Songs shows the real error.
+    api.getLikedSongsTotal().then(
+      (total) => {
+        if (!cancelled) setLikedTotal(total);
+      },
+      () => {},
+    );
     return () => {
       cancelled = true;
     };
     // onAuthLost is recreated on every App render; depending on it would reload in a loop.
   }, [api, attempt]);
+
+  const liked: PlaylistSummary = {
+    id: LIKED_SONGS_ID,
+    name: 'Liked Songs',
+    imageUrl: null,
+    total: likedTotal ?? 0,
+    ownerId: '',
+    collaborative: false,
+  };
 
   return (
     <main className="picker">
@@ -49,8 +66,13 @@ export function PlaylistPicker({ api, onPick, onAuthLost, onLogout }: Props) {
       )}
       {!error && !playlists && <p className="muted">Loading your playlists…</p>}
       {playlists?.length === 0 && <p className="muted">You don't own or collaborate on any playlists yet.</p>}
-      {playlists && playlists.length > 0 && (
+      {playlists && (
         <div className="grid">
+          <button className="tile" onClick={() => onPick(liked)}>
+            <div className="no-art liked">♥</div>
+            <strong>Liked Songs</strong>
+            <span className="muted">{likedTotal === null ? 'Your saved songs' : `${likedTotal} songs`}</span>
+          </button>
           {playlists.map((playlist) => (
             <button key={playlist.id} className="tile" onClick={() => onPick(playlist)}>
               {playlist.imageUrl ? <img src={playlist.imageUrl} alt="" /> : <div className="no-art">♪</div>}

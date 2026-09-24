@@ -45,7 +45,11 @@ const isCallback = window.location.pathname === '/callback';
 
 export function App() {
   const [screen, setScreen] = useState<Screen>(() =>
-    isCallback ? { name: 'loading' } : auth.isLoggedIn() ? { name: 'picker' } : { name: 'connect' },
+    isCallback
+      ? { name: 'loading' }
+      : auth.isLoggedIn()
+        ? { name: 'picker' }
+        : { name: 'connect', error: auth.needsNewScopes() ? 'Reconnect to give access to Liked Songs.' : undefined },
   );
   const [player, setPlayer] = useState<WebPlayer | null>(null);
 

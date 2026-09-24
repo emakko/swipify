@@ -2,7 +2,7 @@ import { AnimatePresence } from 'motion/react';
 import { useCallback, useEffect, useState } from 'react';
 import { buildDeck } from '../core/deck';
 import type { HistoryStore } from '../core/historyStore';
-import type { PlaylistSummary } from '../core/playlists';
+import { LIKED_SONGS_ID, type PlaylistSummary } from '../core/playlists';
 import { currentCard, sessionCounts } from '../core/session';
 import { useCardPlayback } from '../hooks/usePlayer';
 import { useSessionSnapshot } from '../hooks/useSession';
@@ -261,6 +261,11 @@ function SwipeView({
         <HistoryPanel
           entries={snap.history}
           sessionId={sessionId}
+          note={
+            playlist.id === LIKED_SONGS_ID
+              ? 'Restoring re-likes the song — it goes to the top of Liked Songs.'
+              : undefined
+          }
           onRestore={(uri) => controller.restore(uri)}
           onClose={() => setShowHistory(false)}
         />
