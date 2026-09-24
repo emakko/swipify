@@ -163,4 +163,82 @@ describe('createDedupeRun', () => {
     await controller.idle();
     expect(controller.getSnapshot().authLost).toBe(true);
   });
+
+  it('restores the failed kept copy, then retries, then undoes', async () => {
+    const { spotify, controller, ops } = setup();
+    spotify.api.addItems.mockRejectedValueOnce(new TypeError('offline'));
+    controller.start(ops);
+    await controller.idle();
+
+    controller.restore('a');
+    await controller.idle();
+    expect(spotify.rows).toEqual(['a', 'x', 'y', 'y2', 'z']);
+    expect(controller.getSnapshot()).toMatchObject({ removed: 2, canUndo: true, done: 2 });
+    expect(controller.getSnapshot().history).toEqual([]);
+
+    controller.retry();
+    await controller.idle();
+    expect(spotify.rows).toEqual(['a', 'x', 'y', 'z']);
+    expect(controller.getSnapshot()).toMatchObject({ phase: 'done', done: 3 });
+    expect(spotify.api.removeItems.mock.calls.map((call) => call[1])).toEqual([['a'], ['y2']]);
+
+    controller.undo();
+    await controller.idle();
+    expect(spotify.rows).toEqual(PLAYLIST);
+  });
+
+  it('undo fails right after a failed re-add, then retry recovers without a second delete', async () => {
+    const { spotify, controller, ops } = setup();
+    spotify.api.addItems
+      .mockRejectedValueOnce(new TypeError('offline'))
+      .mockRejectedValueOnce(new TypeError('offline'));
+    controller.start(ops);
+    await controller.idle();
+
+    controller.undo();
+    await controller.idle();
+    expect(controller.getSnapshot().phase).toBe('partial');
+    expect(spotify.rows).toEqual(['x', 'y', 'y2', 'z']);
+    expect(controller.getSnapshot().removed).toBe(3);
+
+    controller.retry();
+    await controller.idle();
+    expect(spotify.rows).toEqual(['a', 'x', 'y', 'z']);
+    expect(spotify.api.removeItems.mock.calls.map((call) => call[1])).toEqual([['a'], ['y2']]);
+    expect(controller.getSnapshot().length).toBe(4);
+
+    controller.undo();
+    await controller.idle();
+    expect(spotify.rows).toEqual(PLAYLIST);
+  });
+
+  it('undo fails partway, then retry finishes without redoing the completed row', async () => {
+    const { spotify, controller, ops } = setup();
+    let call = 0;
+    // 1st call: the copies op's re-add. 3rd call: undo's second insert (after the
+    // first undo insert put the kept copy back).
+    spotify.api.addItems.mockImplementation(async (_playlistId: string, uris: string[], position: number) => {
+      call++;
+      if (call === 1 || call === 3) throw new TypeError('offline');
+      spotify.rows.splice(position, 0, ...uris);
+    });
+    controller.start(ops);
+    await controller.idle();
+
+    controller.undo();
+    await controller.idle();
+    expect(controller.getSnapshot()).toMatchObject({ phase: 'partial', done: 2 });
+    expect(spotify.rows).toEqual(['a', 'x', 'y', 'y2', 'z']);
+    expect(controller.getSnapshot().history).toEqual([]);
+
+    controller.retry();
+    await controller.idle();
+    expect(spotify.rows).toEqual(['a', 'x', 'y', 'z']);
+    expect(spotify.api.removeItems.mock.calls.map((call) => call[1])).toEqual([['a'], ['y2']]);
+    expect(controller.getSnapshot().phase).toBe('done');
+
+    controller.undo();
+    await controller.idle();
+    expect(spotify.rows).toEqual(PLAYLIST);
+  });
 });

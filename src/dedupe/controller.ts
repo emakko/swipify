@@ -92,9 +92,15 @@ export function createDedupeRun(deps: DedupeDeps): DedupeController {
   };
 
   function update(patch: Partial<DedupeSnapshot>) {
+    const phase = patch.phase ?? snapshot.phase;
+    // Outside undo, `done` is always "duplicate rows this run currently has removed" —
+    // recomputed here so every call site stays consistent, including restore and undo.
+    const done =
+      phase === 'undoing' || phase === 'undone' ? (patch.done ?? snapshot.done) : missing.length - (reAddPending ? 1 : 0);
     snapshot = {
       ...snapshot,
       ...patch,
+      done,
       removed: missing.length,
       length: length.current,
       canUndo: missing.length > 0,
@@ -129,6 +135,20 @@ export function createDedupeRun(deps: DedupeDeps): DedupeController {
     };
   }
 
+  /** A row this run removed is back in the playlist. */
+  function rowBack(row: MissingRow) {
+    missing = missing.filter((r) => !(r.uri === row.uri && r.index === row.index));
+    const op = ops[next];
+    if (reAddPending && op?.kind === 'copies' && op.card.uri === row.uri && op.keep === row.index) {
+      // The kept copy whose re-add failed is back: that op is finished, so retry must skip it.
+      reAddPending = false;
+      next++;
+      history.remove(playlistId, row.uri); // its safety entry
+    } else if (!missing.some((r) => r.uri === row.uri)) {
+      history.remove(playlistId, row.uri);
+    }
+  }
+
   /** Deletes every copy of `card`. Its History entry must already be written. */
   async function removeSong(card: Card) {
     try {
@@ -152,7 +172,7 @@ export function createDedupeRun(deps: DedupeDeps): DedupeController {
     if (op.kind === 'release') {
       history.add(playlistId, entryFor(card, historyPositions(card.positions, ops)));
       await removeSong(card);
-      update({ done: snapshot.done + card.positions.length });
+      update({});
       return;
     }
     if (!reAddPending) {
@@ -167,7 +187,7 @@ export function createDedupeRun(deps: DedupeDeps): DedupeController {
     length.current++;
     missing = missing.filter((row) => !(row.uri === card.uri && row.index === op.keep));
     history.remove(playlistId, card.uri);
-    update({ done: snapshot.done + op.remove.length });
+    update({});
   }
 
   async function runFrom() {
@@ -213,9 +233,8 @@ export function createDedupeRun(deps: DedupeDeps): DedupeController {
 
     undo() {
       if (snapshot.busy || missing.length === 0) return;
-      const before = { phase: snapshot.phase, done: snapshot.done, total: snapshot.total };
+      const before = { phase: snapshot.phase, total: snapshot.total };
       enqueue(async () => {
-        reAddPending = false;
         // In ascending order, every earlier row is back, so each original index is right.
         const rows = [...missing].sort((a, b) => a.index - b.index);
         update({ phase: 'undoing', done: 0, total: rows.length, error: null });
@@ -223,8 +242,7 @@ export function createDedupeRun(deps: DedupeDeps): DedupeController {
           for (const row of rows) {
             await api.addItems(playlistId, [row.uri], clampIndex(row.index, length.current));
             length.current++;
-            missing = missing.filter((r) => r !== row);
-            if (!missing.some((r) => r.uri === row.uri)) history.remove(playlistId, row.uri);
+            rowBack(row);
             update({ done: snapshot.done + 1 });
           }
         } catch (error) {
@@ -237,13 +255,17 @@ export function createDedupeRun(deps: DedupeDeps): DedupeController {
 
     restore(uri) {
       enqueue(async () => {
+        const entry = history.load(playlistId).find((e) => e.uri === uri);
+        if (!entry) return; // Nothing recorded for this uri: restoreEntry would be a no-op.
+        const op = ops[next];
+        // The safety entry of a pending copies op only ever put the kept row back; any
+        // other entry's rows are exactly the still-missing rows for that uri.
+        const rows: MissingRow[] =
+          reAddPending && op?.kind === 'copies' && op.card.uri === uri
+            ? [{ uri, index: op.keep }]
+            : missing.filter((row) => row.uri === uri);
         await restoreEntry({ api, history, playlistId }, uri, length);
-        missing = missing.filter((row) => row.uri !== uri);
-        // A kept copy whose re-add failed is back now; retry must not add it again.
-        if (reAddPending && ops[next]?.card.uri === uri) {
-          reAddPending = false;
-          next++;
-        }
+        rows.forEach(rowBack);
         update({});
       });
     },
