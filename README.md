@@ -1,3 +1,5 @@
+<p align="center"><img src="public/favicon.png" alt="Swipify icon" width="128" height="128"></p>
+
 # Swipify
 
 Tinder for your playlists: songs play in random order; swipe right to keep, left to remove.
