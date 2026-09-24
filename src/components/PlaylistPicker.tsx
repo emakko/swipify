@@ -3,14 +3,23 @@ import { editablePlaylists, LIKED_SONGS_ID, type PlaylistSummary } from '../core
 import type { SpotifyApi } from '../spotify/api';
 import { AuthError, describeError } from '../spotify/errors';
 
+export type Mode = 'swipe' | 'dedupe';
+
+const MODE_HINTS: Record<Mode, string> = {
+  swipe: 'Songs play in random order: swipe right to keep, left to remove.',
+  dedupe: 'Keeps the first copy of every song and removes the rest.',
+};
+
 interface Props {
   api: SpotifyApi;
+  mode: Mode;
+  onModeChange: (mode: Mode) => void;
   onPick: (playlist: PlaylistSummary) => void;
   onAuthLost: () => void;
   onLogout: () => void;
 }
 
-export function PlaylistPicker({ api, onPick, onAuthLost, onLogout }: Props) {
+export function PlaylistPicker({ api, mode, onModeChange, onPick, onAuthLost, onLogout }: Props) {
   const [playlists, setPlaylists] = useState<PlaylistSummary[] | null>(null);
   const [likedTotal, setLikedTotal] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -54,11 +63,22 @@ export function PlaylistPicker({ api, onPick, onAuthLost, onLogout }: Props) {
   return (
     <main className="picker">
       <header>
-        <h1>Pick a playlist</h1>
+        <div className="heading">
+          <h1>Pick a playlist</h1>
+          <div className="seg" role="group" aria-label="Mode">
+            <button className={mode === 'swipe' ? 'on' : ''} aria-pressed={mode === 'swipe'} onClick={() => onModeChange('swipe')}>
+              Swipe
+            </button>
+            <button className={mode === 'dedupe' ? 'on' : ''} aria-pressed={mode === 'dedupe'} onClick={() => onModeChange('dedupe')}>
+              Remove duplicates
+            </button>
+          </div>
+        </div>
         <button className="link" onClick={onLogout}>
           Log out
         </button>
       </header>
+      <p className="muted mode-hint">{MODE_HINTS[mode]}</p>
       {error && (
         <p className="error">
           {error} <button onClick={() => setAttempt((n) => n + 1)}>Retry</button>

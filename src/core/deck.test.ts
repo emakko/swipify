@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildDeck, shuffle, type RawItem, type RawPlaylistRow } from './deck';
+import { buildDeck, collectCards, shuffle, type RawItem, type RawPlaylistRow } from './deck';
 
 // With random() just below 1, Fisher–Yates never swaps, so order is preserved.
 const keepOrder = () => 0.999999;
@@ -109,6 +109,22 @@ describe('buildDeck', () => {
       uri: 'spotify:track:original',
       positions: [0, 1],
     });
+  });
+});
+
+describe('collectCards', () => {
+  it('returns one card per song in playlist order, with every position', () => {
+    const { cards, skipped } = collectCards([
+      track('spotify:track:b'),
+      { is_local: true, item: null },
+      track('spotify:track:a'),
+      track('spotify:track:b'),
+    ]);
+    expect(cards.map((c) => [c.uri, c.positions])).toEqual([
+      ['spotify:track:b', [0, 3]],
+      ['spotify:track:a', [2]],
+    ]);
+    expect(skipped).toBe(1);
   });
 });
 

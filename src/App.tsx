@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ConnectScreen } from './components/ConnectScreen';
-import { PlaylistPicker } from './components/PlaylistPicker';
+import { DedupeScreen } from './components/DedupeScreen';
+import { PlaylistPicker, type Mode } from './components/PlaylistPicker';
 import { SwipeScreen } from './components/SwipeScreen';
 import { createHistoryStore } from './core/historyStore';
 import type { PlaylistSummary } from './core/playlists';
@@ -35,11 +36,22 @@ function safeLocalStorage(): Storage | null {
   }
 }
 
+const MODE_KEY = 'swipify:mode';
+
+function loadMode(): Mode {
+  try {
+    return safeLocalStorage()?.getItem(MODE_KEY) === 'dedupe' ? 'dedupe' : 'swipe';
+  } catch {
+    return 'swipe';
+  }
+}
+
 type Screen =
   | { name: 'loading' }
   | { name: 'connect'; error?: string }
   | { name: 'picker' }
-  | { name: 'swipe'; playlist: PlaylistSummary };
+  | { name: 'swipe'; playlist: PlaylistSummary }
+  | { name: 'dedupe'; playlist: PlaylistSummary };
 
 const isCallback = window.location.pathname === '/callback';
 
@@ -52,6 +64,15 @@ export function App() {
         : { name: 'connect', error: auth.needsNewScopes() ? 'Reconnect to give access to Liked Songs.' : undefined },
   );
   const [player, setPlayer] = useState<WebPlayer | null>(null);
+  const [mode, setMode] = useState<Mode>(loadMode);
+  const changeMode = (next: Mode) => {
+    setMode(next);
+    try {
+      safeLocalStorage()?.setItem(MODE_KEY, next);
+    } catch {
+      // Storage full or blocked: the mode lasts until the page reloads.
+    }
+  };
 
   useEffect(() => {
     if (!isCallback) return;
@@ -64,7 +85,7 @@ export function App() {
       .finally(() => window.history.replaceState(null, '', '/'));
   }, []);
 
-  const loggedIn = screen.name === 'picker' || screen.name === 'swipe';
+  const loggedIn = screen.name === 'picker' || screen.name === 'swipe' || screen.name === 'dedupe';
   useEffect(() => {
     // Create the player as soon as we are logged in so it is ready by the time a playlist loads.
     if (loggedIn && !player) setPlayer(createWebPlayer(() => auth.getAccessToken()));
@@ -87,7 +108,9 @@ export function App() {
       return (
         <PlaylistPicker
           api={api}
-          onPick={(playlist) => setScreen({ name: 'swipe', playlist })}
+          mode={mode}
+          onModeChange={changeMode}
+          onPick={(playlist) => setScreen(mode === 'swipe' ? { name: 'swipe', playlist } : { name: 'dedupe', playlist })}
           onAuthLost={onAuthLost}
           onLogout={() => logout()}
         />
@@ -100,6 +123,17 @@ export function App() {
           playlist={screen.playlist}
           api={api}
           player={player}
+          history={history}
+          onExit={() => setScreen({ name: 'picker' })}
+          onAuthLost={onAuthLost}
+        />
+      );
+    case 'dedupe':
+      return (
+        <DedupeScreen
+          key={screen.playlist.id}
+          playlist={screen.playlist}
+          api={api}
           history={history}
           onExit={() => setScreen({ name: 'picker' })}
           onAuthLost={onAuthLost}

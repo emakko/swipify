@@ -37,7 +37,8 @@ export interface Deck {
   totalRows: number;
 }
 
-export function buildDeck(rows: RawPlaylistRow[], random: () => number = Math.random): Deck {
+/** One card per song, in order of first appearance, plus the number of rows that can't be swiped. */
+export function collectCards(rows: RawPlaylistRow[]): { cards: Card[]; skipped: number } {
   const byUri = new Map<string, Card>();
   let skipped = 0;
 
@@ -68,7 +69,12 @@ export function buildDeck(rows: RawPlaylistRow[], random: () => number = Math.ra
     });
   });
 
-  return { cards: shuffle([...byUri.values()], random), skipped, totalRows: rows.length };
+  return { cards: [...byUri.values()], skipped };
+}
+
+export function buildDeck(rows: RawPlaylistRow[], random: () => number = Math.random): Deck {
+  const { cards, skipped } = collectCards(rows);
+  return { cards: shuffle(cards, random), skipped, totalRows: rows.length };
 }
 
 /** Fisher–Yates shuffle returning a new array. */
