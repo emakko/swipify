@@ -12,6 +12,7 @@ Tinder for your playlists: songs play in random order; swipe right to keep, left
 - **Spotify Premium** — playback in the browser only works with Premium.
 - A **desktop browser**: Chrome, Edge or Firefox.
 - **[Node.js](https://nodejs.org) 22.12 or newer** (the LTS installer is fine). Check with `node -v`.
+  Using nvm? `nvm use` picks the right version from `.nvmrc`.
 
 ## Get it
 
@@ -81,6 +82,25 @@ Close it first; the port can't change because it's part of the Redirect URI.
 
 **An `EBADENGINE` warning or odd errors during `npm install`** — your Node.js is too old. Install
 the current LTS from https://nodejs.org.
+
+## Privacy
+
+There is no Swipify server. The app runs in your browser and only talks to Spotify
+(`accounts.spotify.com`, `api.spotify.com` and Spotify's player from `sdk.scdn.co`).
+
+**Stored in your browser only** (local storage): your Spotify login tokens and the History of
+removed songs per playlist. Nothing else is saved, and nothing is sent anywhere but Spotify.
+
+**What Swipify asks Spotify for, and why:**
+
+- Read your playlists and Liked Songs — to show the picker and load the songs.
+- Change your playlists and Liked Songs — to remove songs on a left swipe and put them back on Undo or Restore.
+- Play music and control playback — to play songs in the browser.
+- Read your name, email, country and subscription — required by Spotify's in-browser player. Swipify
+  itself doesn't use your email.
+
+**To revoke access**, go to https://www.spotify.com/account/apps/ and remove the app you created.
+To clear the local data, use your browser's "clear site data" for `127.0.0.1:5173`.
 
 ## Contributing
 
