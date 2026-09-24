@@ -52,6 +52,15 @@ export function createSession(deps: SessionDeps, deck: Deck): SessionController 
   let playlistLength = deck.totalRows;
   let pending = 0;
   let queue: Promise<void> = Promise.resolve();
+
+  // The song is back in the playlist, so it is no longer removed: drop any history
+  // entry left over from a session that removed it, before it can be shown as
+  // restorable or trigger a stale restoreFailed re-mark.
+  const deckUris = new Set(deck.cards.map((card) => card.uri));
+  for (const entry of history.load(playlistId)) {
+    if (deckUris.has(entry.uri)) history.remove(playlistId, entry.uri);
+  }
+
   let snapshot: SessionSnapshot = {
     session: initialSession(deck.cards),
     history: history.load(playlistId),

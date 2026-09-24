@@ -83,14 +83,20 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
         decisions: omit(state.decisions, action.uri),
         undoStack: withoutUri(state.undoStack, action.uri),
       };
-    case 'restoreFailed':
-      // The song is still removed on Spotify, so the UI must say so too.
+    case 'restoreFailed': {
+      // The song is still removed on Spotify, so the UI must say so too — but only when
+      // this restore attempt is still the current word on it: either the explicit
+      // 'restored' it followed, or the undecided state an undo of 'remove' left behind.
+      // If the song was since kept (or anything else happened to it), leave it alone.
       if (!state.cards.some((card) => card.uri === action.uri)) return state;
+      const decision = state.decisions[action.uri];
+      if (decision !== 'restored' && decision !== undefined) return state;
       return {
         ...state,
         decisions: { ...state.decisions, [action.uri]: 'remove' },
         undoStack: [...withoutUri(state.undoStack, action.uri), { uri: action.uri, decision: 'remove' }],
       };
+    }
   }
 }
 

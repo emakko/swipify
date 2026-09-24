@@ -191,6 +191,36 @@ describe('createSession', () => {
     expect(controller.getSnapshot().authLost).toBe(true);
   });
 
+  it('drops a stale history entry for a song that is back in the deck at session start', () => {
+    const stale: RemovedEntry = {
+      uri: 'a',
+      name: 'a',
+      artists: [],
+      imageUrl: null,
+      positions: [0],
+      sessionId: 'old',
+      removedAt: 1,
+    };
+    const surviving: RemovedEntry = {
+      uri: 'zzz',
+      name: 'zzz',
+      artists: [],
+      imageUrl: null,
+      positions: [9],
+      sessionId: 'old',
+      removedAt: 2,
+    };
+    const history = createHistoryStore(memoryStorage());
+    history.add('pl', stale);
+    history.add('pl', surviving);
+    const api = { removeItems: vi.fn(async () => {}), addItems: vi.fn(async () => {}) };
+    const deck: Deck = { cards: [card('a', [0]), card('b', [1]), card('c', [2, 4])], skipped: 1, totalRows: 5 };
+    const controller = createSession({ api, history, playlistId: 'pl', sessionId: 's1', now: () => 1000 }, deck);
+
+    expect(controller.getSnapshot().history).toEqual([surviving]);
+    expect(history.load('pl')).toEqual([surviving]);
+  });
+
   it('notifies subscribers and clears errors on dismiss', async () => {
     const { api, controller } = setup();
     const listener = vi.fn();

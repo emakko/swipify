@@ -102,6 +102,11 @@ describe('sessionReducer', () => {
     expect(run(state, { type: 'restoreFailed', uri: 'zzz' })).toBe(state);
   });
 
+  it('restoreFailed is a no-op when the song was kept in this session', () => {
+    const state = run(start(), { type: 'keep', uri: 'a' });
+    expect(run(state, { type: 'restoreFailed', uri: 'a' })).toBe(state);
+  });
+
   it('has no current card once everything is decided, or for an empty deck', () => {
     const state = run(start(), { type: 'keep', uri: 'a' }, { type: 'keep', uri: 'b' }, { type: 'keep', uri: 'c' });
     expect(currentCard(state)).toBeNull();
