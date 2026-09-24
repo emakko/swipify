@@ -17,11 +17,14 @@ export function PlayerControls({ player }: { player: WebPlayer }) {
   const live = snap.positionMs + (snap.paused ? 0 : Date.now() - snap.updatedAt);
   const position = dragMs ?? Math.min(live, snap.durationMs);
 
-  const commitSeek = (input: HTMLInputElement) => {
+  const commitSeek = () => {
     if (dragMs !== null) void player.seek(dragMs);
     setDragMs(null);
-    input.blur(); // hand the arrow keys back to swiping
   };
+
+  // A drag interrupted before pointerup (capture lost, gesture cancelled) must still
+  // clear dragMs, or the slider freezes at the last dragged position.
+  const cancelSeek = () => setDragMs(null);
 
   return (
     <div className="player">
@@ -44,8 +47,13 @@ export function PlayerControls({ player }: { player: WebPlayer }) {
         step={1000}
         value={position}
         onChange={(e) => setDragMs(Number(e.target.value))}
-        onPointerUp={(e) => commitSeek(e.currentTarget)}
-        onKeyUp={(e) => commitSeek(e.currentTarget)}
+        onPointerUp={(e) => {
+          commitSeek();
+          e.currentTarget.blur(); // hand Space back to swiping instead of the slider swallowing it
+        }}
+        onPointerCancel={cancelSeek}
+        onLostPointerCapture={cancelSeek}
+        onKeyUp={commitSeek}
       />
       <span className="time">{formatTime(snap.durationMs)}</span>
     </div>

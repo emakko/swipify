@@ -3,12 +3,13 @@ interface Props {
   removed: number;
   skipped: number;
   canUndo: boolean;
+  busy: boolean;
   onUndo: () => void;
   onShowHistory: () => void;
   onPickAnother: () => void;
 }
 
-export function DoneScreen({ kept, removed, skipped, canUndo, onUndo, onShowHistory, onPickAnother }: Props) {
+export function DoneScreen({ kept, removed, skipped, canUndo, busy, onUndo, onShowHistory, onPickAnother }: Props) {
   return (
     <div className="done">
       <h2>All done!</h2>
@@ -19,7 +20,7 @@ export function DoneScreen({ kept, removed, skipped, canUndo, onUndo, onShowHist
       <div className="row">
         {canUndo && <button onClick={onUndo}>↩ Undo last</button>}
         <button onClick={onShowHistory}>History</button>
-        <button className="primary" onClick={onPickAnother}>
+        <button className="primary" onClick={onPickAnother} disabled={busy}>
           Pick another playlist
         </button>
       </div>

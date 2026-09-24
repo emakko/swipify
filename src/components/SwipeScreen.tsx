@@ -118,9 +118,13 @@ function SwipeView({
     if (!started) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.repeat || e.target instanceof HTMLInputElement) return;
-      if (e.key === 'ArrowRight') swipe('keep');
-      else if (e.key === 'ArrowLeft') swipe('remove');
-      else if (e.key === ' ') {
+      // While the History panel is open it can cover the card at narrow widths, so
+      // ←/→ must not remove or keep a song the user can't see. Undo and Space still work.
+      if (e.key === 'ArrowRight') {
+        if (!showHistory) swipe('keep');
+      } else if (e.key === 'ArrowLeft') {
+        if (!showHistory) swipe('remove');
+      } else if (e.key === ' ') {
         e.preventDefault();
         // Only the current card's own playback should toggle: on an unplayable card or
         // the Done screen the SDK still holds the previous track, so togglePlay would
@@ -133,7 +137,7 @@ function SwipeView({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [started, swipe, player, controller, card]);
+  }, [started, swipe, player, controller, card, showHistory]);
 
   const dismissError = useCallback(() => {
     controller.dismissError();
@@ -150,7 +154,7 @@ function SwipeView({
   if (!started) {
     return (
       <main className="center intro">
-        <button className="link back" onClick={exit}>
+        <button className="link back" onClick={exit} disabled={snap.busy}>
           ← Playlists
         </button>
         <h1>{playlist.name}</h1>
@@ -176,7 +180,7 @@ function SwipeView({
   return (
     <main className="swipe">
       <header className="topbar">
-        <button className="link" onClick={exit}>
+        <button className="link" onClick={exit} disabled={snap.busy}>
           ← Playlists
         </button>
         <span className="title">{playlist.name}</span>
@@ -196,6 +200,7 @@ function SwipeView({
             removed={counts.removed}
             skipped={snap.skipped}
             canUndo={canUndo}
+            busy={snap.busy}
             onUndo={() => controller.undo()}
             onShowHistory={() => setShowHistory(true)}
             onPickAnother={exit}
@@ -214,7 +219,7 @@ function SwipeView({
               </button>
             </p>
           )}
-          {card.isPlayable && <PlayerControls player={player} />}
+          {card.isPlayable && <PlayerControls key={card.uri} player={player} />}
           <div className="actions">
             <button
               className="action remove"
