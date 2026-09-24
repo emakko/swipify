@@ -58,3 +58,11 @@ export function createHistoryStore(storage: Storage | null): HistoryStore {
     remove: (playlistId, uri) => write(playlistId, read(playlistId).filter((e) => e.uri !== uri)),
   };
 }
+
+/** Drops the entries of songs that are in the playlist again: they are no longer removed. */
+export function forgetPresent(history: HistoryStore, playlistId: string, uris: Iterable<string>): void {
+  const present = new Set(uris);
+  for (const entry of history.load(playlistId)) {
+    if (present.has(entry.uri)) history.remove(playlistId, entry.uri);
+  }
+}

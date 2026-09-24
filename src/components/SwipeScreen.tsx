@@ -5,7 +5,7 @@ import type { HistoryStore } from '../core/historyStore';
 import { LIKED_SONGS_ID, type PlaylistSummary } from '../core/playlists';
 import { currentCard, sessionCounts } from '../core/session';
 import { useCardPlayback } from '../hooks/usePlayer';
-import { useSessionSnapshot } from '../hooks/useSession';
+import { useSnapshot } from '../hooks/useSnapshot';
 import { createSession, type SessionController } from '../session/controller';
 import type { SpotifyApi } from '../spotify/api';
 import { AuthError, describeError } from '../spotify/errors';
@@ -76,7 +76,7 @@ function SwipeView({
   controller,
   sessionId,
 }: Props & { controller: SessionController; sessionId: string }) {
-  const snap = useSessionSnapshot(controller);
+  const snap = useSnapshot(controller);
   const card = currentCard(snap.session);
   const counts = sessionCounts(snap.session);
   const [started, setStarted] = useState(false);

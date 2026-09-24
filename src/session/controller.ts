@@ -1,6 +1,5 @@
 import type { Deck } from '../core/deck';
-import type { HistoryStore, RemovedEntry } from '../core/historyStore';
-import { clampIndex, restoreIndices } from '../core/positions';
+import { forgetPresent, type HistoryStore, type RemovedEntry } from '../core/historyStore';
 import {
   currentCard,
   initialSession,
@@ -10,6 +9,7 @@ import {
 } from '../core/session';
 import type { SpotifyApi } from '../spotify/api';
 import { ApiError, AuthError, describeError } from '../spotify/errors';
+import { restoreEntry } from './restore';
 
 export interface SessionDeps {
   api: Pick<SpotifyApi, 'removeItems' | 'addItems'>;
@@ -49,17 +49,14 @@ export interface SessionController {
 export function createSession(deps: SessionDeps, deck: Deck): SessionController {
   const { api, history, playlistId, sessionId, now } = deps;
   const listeners = new Set<() => void>();
-  let playlistLength = deck.totalRows;
+  const length = { current: deck.totalRows };
   let pending = 0;
   let queue: Promise<void> = Promise.resolve();
 
   // The song is back in the playlist, so it is no longer removed: drop any history
   // entry left over from a session that removed it, before it can be shown as
   // restorable or trigger a stale restoreFailed re-mark.
-  const deckUris = new Set(deck.cards.map((card) => card.uri));
-  for (const entry of history.load(playlistId)) {
-    if (deckUris.has(entry.uri)) history.remove(playlistId, entry.uri);
-  }
+  forgetPresent(history, playlistId, deck.cards.map((card) => card.uri));
 
   let snapshot: SessionSnapshot = {
     session: initialSession(deck.cards),
@@ -96,17 +93,7 @@ export function createSession(deps: SessionDeps, deck: Deck): SessionController 
   }
 
   async function restoreOnSpotify(uri: string) {
-    const entries = history.load(playlistId);
-    const entry = entries.find((e) => e.uri === uri);
-    if (!entry) return; // The removal never reached Spotify, so there is nothing to put back.
-    const otherRemoved = entries
-      .filter((e) => e.sessionId === entry.sessionId && e.uri !== uri)
-      .flatMap((e) => e.positions);
-    for (const index of restoreIndices(entry.positions, otherRemoved)) {
-      await api.addItems(playlistId, [uri], clampIndex(index, playlistLength));
-      playlistLength++;
-    }
-    history.remove(playlistId, uri);
+    await restoreEntry({ api, history, playlistId }, uri, length);
     update({ history: history.load(playlistId) });
   }
 
@@ -168,7 +155,7 @@ export function createSession(deps: SessionDeps, deck: Deck): SessionController 
             `Couldn't confirm the removal of "${card.name}" — if it went through, you can restore it from History.`,
           );
         }
-        playlistLength -= card.positions.length;
+        length.current -= card.positions.length;
       });
     },
 

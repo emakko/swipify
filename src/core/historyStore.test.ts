@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { memoryStorage } from '../test/memoryStorage';
-import { createHistoryStore, type RemovedEntry } from './historyStore';
+import { createHistoryStore, forgetPresent, type RemovedEntry } from './historyStore';
 
 const entry = (uri: string, removedAt = 1, positions = [0]): RemovedEntry => ({
   uri,
@@ -62,6 +62,16 @@ describe('createHistoryStore', () => {
   it('works without any storage', () => {
     const store = createHistoryStore(null);
     store.add('p1', entry('a'));
+    expect(store.load('p1').map((e) => e.uri)).toEqual(['a']);
+  });
+});
+
+describe('forgetPresent', () => {
+  it('drops entries for songs that are in the playlist again', () => {
+    const store = createHistoryStore(memoryStorage());
+    store.add('p1', entry('a'));
+    store.add('p1', entry('b'));
+    forgetPresent(store, 'p1', ['b', 'z']);
     expect(store.load('p1').map((e) => e.uri)).toEqual(['a']);
   });
 });
