@@ -191,6 +191,39 @@ describe('createSession', () => {
     expect(controller.getSnapshot().authLost).toBe(true);
   });
 
+  it('records the history entry before the DELETE, so it exists while removal is pending', async () => {
+    const { api, controller } = setup();
+    const pending = deferred();
+    api.removeItems.mockImplementationOnce(() => pending.promise);
+    controller.remove();
+    expect(controller.getSnapshot().history).toEqual([
+      { uri: 'a', name: 'a', artists: [], imageUrl: null, positions: [0], sessionId: 's1', removedAt: 1000 },
+    ]);
+    pending.resolve();
+    await controller.idle();
+  });
+
+  it('drops the history entry when a 403 definitively rejects the removal', async () => {
+    const { api, controller } = setup();
+    api.removeItems.mockRejectedValueOnce(new ApiError(403, 'Forbidden'));
+    controller.remove();
+    await controller.idle();
+    expect(controller.getSnapshot().history).toEqual([]);
+    expect(controller.getSnapshot().error).toMatch(/permission/);
+  });
+
+  it("keeps the history entry and says the removal couldn't be confirmed on an ambiguous failure", async () => {
+    const { api, controller } = setup();
+    api.removeItems.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    controller.remove();
+    await controller.idle();
+    expect(controller.getSnapshot().history.map((e) => e.uri)).toEqual(['a']);
+    expect(controller.getSnapshot().error).toBe(
+      'Couldn\'t confirm the removal of "a" — if it went through, you can restore it from History.',
+    );
+    expect(current(controller)).toBe('a');
+  });
+
   it('drops a stale history entry for a song that is back in the deck at session start', () => {
     const stale: RemovedEntry = {
       uri: 'a',

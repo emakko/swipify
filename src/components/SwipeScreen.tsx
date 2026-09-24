@@ -93,6 +93,18 @@ function SwipeView({
     if (snap.authLost) onAuthLost();
   }, [snap.authLost]);
 
+  useEffect(() => {
+    // A Spotify call is in flight: warn before the tab closes so a removal that went
+    // through doesn't lose its history entry to an unfinished write.
+    if (!snap.busy) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [snap.busy]);
+
   const swipe = useCallback(
     (next: SwipeDirection) => {
       setDirection(next);

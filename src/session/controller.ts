@@ -9,7 +9,7 @@ import {
   type SessionState,
 } from '../core/session';
 import type { SpotifyApi } from '../spotify/api';
-import { AuthError, describeError } from '../spotify/errors';
+import { ApiError, AuthError, describeError } from '../spotify/errors';
 
 export interface SessionDeps {
   api: Pick<SpotifyApi, 'removeItems' | 'addItems'>;
@@ -138,24 +138,37 @@ export function createSession(deps: SessionDeps, deck: Deck): SessionController 
       const card = currentCard(snapshot.session);
       if (!card) return;
       dispatch({ type: 'remove', uri: card.uri });
+      // Recorded before the DELETE, so a reload or a lost response while the call is
+      // in flight can't leave a removal that went through with no way to restore it.
+      history.add(playlistId, {
+        uri: card.uri,
+        name: card.name,
+        artists: card.artists,
+        imageUrl: card.imageUrl,
+        positions: card.positions,
+        sessionId,
+        removedAt: now(),
+      });
+      update({ history: history.load(playlistId) });
       enqueue(async () => {
         try {
           await api.removeItems(playlistId, [card.uri]);
         } catch (error) {
           dispatch({ type: 'removalFailed', uri: card.uri });
-          throw error;
+          const definiteRejection =
+            error instanceof AuthError || (error instanceof ApiError && error.status >= 400 && error.status < 500);
+          if (definiteRejection) {
+            history.remove(playlistId, card.uri);
+            update({ history: history.load(playlistId) });
+            throw error;
+          }
+          // Ambiguous failure (network error, 5xx, or anything else): Spotify may have
+          // applied the DELETE anyway, so keep the entry restorable and say so.
+          throw new Error(
+            `Couldn't confirm the removal of "${card.name}" — if it went through, you can restore it from History.`,
+          );
         }
         playlistLength -= card.positions.length;
-        history.add(playlistId, {
-          uri: card.uri,
-          name: card.name,
-          artists: card.artists,
-          imageUrl: card.imageUrl,
-          positions: card.positions,
-          sessionId,
-          removedAt: now(),
-        });
-        update({ history: history.load(playlistId) });
       });
     },
 
