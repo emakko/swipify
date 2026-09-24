@@ -169,6 +169,11 @@ function DedupeView({
         <p className="muted">
           {totalRows} songs{foundCount > 0 && ` · ${duplicates(foundCount)} found`}
         </p>
+        {snap.history.length > 0 && (
+          <button className="link" onClick={() => setShowHistory(true)}>
+            History ({snap.history.length})
+          </button>
+        )}
         {banner && <p className="banner">{banner}</p>}
         {foundCount === 0 ? (
           <div className="empty">
@@ -189,14 +194,24 @@ function DedupeView({
                 {copies.map((e) => {
                   const on = !unticked.has(e.key);
                   const total = e.card.positions.length;
+                  const coveredByRelease = found.otherReleases.some(
+                    (r) => r.card.uri === e.card.uri && !unticked.has(r.key),
+                  );
                   return (
                     <DuplicateRow
                       key={e.key}
                       card={e.card}
-                      checked={on}
+                      checked={coveredByRelease || on}
+                      disabled={coveredByRelease}
                       onToggle={() => toggle(e.key)}
                       detail={e.card.artists.join(', ')}
-                      count={on ? `${total} copies · removes ${e.remove.length}` : `keeps all ${total}`}
+                      count={
+                        coveredByRelease
+                          ? 'removed with the other release'
+                          : on
+                            ? `${total} copies · removes ${e.remove.length}`
+                            : `keeps all ${total}`
+                      }
                     />
                   );
                 })}
@@ -284,7 +299,7 @@ function DedupeView({
         )}
         {snap.canUndo && (
           <button onClick={() => controller.undo()} disabled={snap.busy}>
-            ↩ {partial ? `Undo the ${snap.removed}` : 'Undo'}
+            ↩ {partial && snap.done > 0 ? `Undo the ${snap.done}` : 'Undo'}
           </button>
         )}
         <button onClick={() => setShowHistory(true)}>History ({snap.history.length})</button>
@@ -302,17 +317,19 @@ function DuplicateRow({
   checked,
   detail,
   count,
+  disabled,
   onToggle,
 }: {
   card: Card;
   checked: boolean;
   detail: string;
   count?: string;
+  disabled?: boolean;
   onToggle: () => void;
 }) {
   return (
     <label className={checked ? 'dup-row' : 'dup-row off'}>
-      <input type="checkbox" checked={checked} onChange={onToggle} />
+      <input type="checkbox" checked={checked} disabled={disabled} onChange={onToggle} />
       {card.imageUrl ? <img src={card.imageUrl} alt="" /> : <div className="no-art small">♪</div>}
       <div className="grow">
         <strong>{card.name}</strong>

@@ -31,3 +31,5 @@ Run through this against a real Spotify account before merging changes to swipin
   a local file: check the order in Spotify afterwards, then Undo and check it matches the original.
 - Remove duplicates, reload, open the playlist again in Remove duplicates and Restore the other
   release from History.
+- Remove duplicates on Liked Songs with two releases of one song liked: the lower one is
+  un-liked, and Undo likes it again (at the top).

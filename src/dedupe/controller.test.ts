@@ -10,17 +10,19 @@ import { createDedupeRun } from './controller';
 const PLAYLIST = ['a', 'x', 'a', 'y', 'y2', 'a', 'z'];
 const NAMES: Record<string, string> = { y2: 'y' };
 
-const row = (uri: string): RawPlaylistRow => ({
-  is_local: false,
-  item: {
-    type: 'track',
-    uri,
-    name: NAMES[uri] ?? uri,
-    duration_ms: 1000,
-    artists: [{ name: 'Artist' }],
-    album: { name: `Album ${uri}` },
-  },
-});
+const row =
+  (names: Record<string, string> = NAMES) =>
+  (uri: string): RawPlaylistRow => ({
+    is_local: false,
+    item: {
+      type: 'track',
+      uri,
+      name: names[uri] ?? uri,
+      duration_ms: 1000,
+      artists: [{ name: 'Artist' }],
+      album: { name: `Album ${uri}` },
+    },
+  });
 
 /** A playlist "on Spotify" that the fake API edits the way the real one does. */
 function fakeSpotify(initial: string[]) {
@@ -36,17 +38,17 @@ function fakeSpotify(initial: string[]) {
   return { rows, api };
 }
 
-function setup(unticked: string[] = []) {
-  const spotify = fakeSpotify(PLAYLIST);
+function setup(unticked: string[] = [], playlist: string[] = PLAYLIST, names: Record<string, string> = NAMES) {
+  const spotify = fakeSpotify(playlist);
   const history = createHistoryStore(memoryStorage());
-  const ops = planRemoval(findDuplicates(collectCards(PLAYLIST.map(row)).cards), new Set(unticked));
+  const ops = planRemoval(findDuplicates(collectCards(playlist.map(row(names))).cards), new Set(unticked));
   const controller = createDedupeRun({
     api: spotify.api,
     history,
     playlistId: 'pl',
     runId: 'r1',
     now: () => 1000,
-    playlistLength: PLAYLIST.length,
+    playlistLength: playlist.length,
   });
   return { spotify, controller, ops };
 }
@@ -254,5 +256,43 @@ describe('createDedupeRun', () => {
     controller.undo();
     await controller.idle();
     expect(spotify.rows).toEqual(PLAYLIST);
+  });
+
+  describe('a release that also has its own extra copies', () => {
+    // a2 is another release of a (kept), and covers rows 2 and 4; b keeps row 1 and removes row 3.
+    const PLAYLIST2 = ['a', 'b', 'a2', 'b', 'a2'];
+    const NAMES2: Record<string, string> = { a2: 'a' };
+
+    it('removes the release and the copy, then undo restores the playlist', async () => {
+      const { spotify, controller, ops } = setup([], PLAYLIST2, NAMES2);
+      controller.start(ops);
+      await controller.idle();
+      expect(spotify.rows).toEqual(['a', 'b']);
+      expect(controller.getSnapshot()).toMatchObject({ phase: 'done', done: 3 });
+      expect(controller.getSnapshot().history).toEqual([
+        {
+          uri: 'a2',
+          name: 'a',
+          artists: ['Artist'],
+          imageUrl: null,
+          positions: [2, 3],
+          sessionId: 'r1',
+          removedAt: 1000,
+        },
+      ]);
+
+      controller.undo();
+      await controller.idle();
+      expect(spotify.rows).toEqual(PLAYLIST2);
+    });
+
+    it('restores the release from History, landing after the surviving copy', async () => {
+      const { spotify, controller, ops } = setup([], PLAYLIST2, NAMES2);
+      controller.start(ops);
+      await controller.idle();
+      controller.restore('a2');
+      await controller.idle();
+      expect(spotify.rows).toEqual(['a', 'b', 'a2', 'a2']);
+    });
   });
 });
