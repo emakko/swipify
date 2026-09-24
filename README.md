@@ -1,25 +1,44 @@
 # Swipify
 
 Tinder for your playlists: songs play in random order; swipe right to keep, left to remove.
-Needs Spotify Premium and a desktop browser (Chrome, Edge or Firefox).
 
-## One-time setup
+<!-- Add a screenshot or GIF of the swipe screen at docs/screenshot.png -->
+![Swipify swipe screen](docs/screenshot.png)
+
+## Requirements
+
+- **Spotify Premium** — playback in the browser only works with Premium.
+- A **desktop browser**: Chrome, Edge or Firefox.
+- **[Node.js](https://nodejs.org) 22.12 or newer** (the LTS installer is fine). Check with `node -v`.
+
+## Get it
+
+    git clone https://github.com/emakko/swipify.git
+    cd swipify
+
+No git? Use **Code → Download ZIP** on GitHub, unzip it and open a terminal in the folder.
+
+## Setup (once)
+
+Swipify runs on your own computer and talks to Spotify through a free Spotify app that you create.
 
 1. Go to https://developer.spotify.com/dashboard and log in.
-2. **Create app**: any name/description; Redirect URI **exactly** `http://127.0.0.1:5173/callback`;
-   tick **Web API** and **Web Playback SDK**; save.
-3. Open the app's **Settings**, copy the **Client ID**.
-4. In this folder: copy `.env.example` to `.env` and paste the Client ID after `VITE_SPOTIFY_CLIENT_ID=`.
-   Restart `npm run dev` after editing `.env` — Vite only reads it on startup.
-5. `npm install`
-6. In Development Mode, Spotify only lets allowlisted accounts log in. If login fails with
-   "user not registered", add your account under the app's Dashboard → **User Management**.
+2. **Create app**: any name and description. Set the Redirect URI to **exactly**
+   `http://127.0.0.1:5173/callback`, tick **Web API** and **Web Playback SDK**, and save.
+3. Open the app's **Settings** and copy the **Client ID**.
+4. In the Swipify folder, run:
+
+       npm install
+       npm run setup
+
+   Paste the Client ID when asked. (This writes it to `.env`; you can also copy `.env.example`
+   to `.env` and fill it in by hand.)
 
 ## Run
 
-    npm run dev
+    npm start
 
-Open **http://127.0.0.1:5173** (not `localhost` — Spotify rejects it).
+Open **http://127.0.0.1:5173** (not `localhost` — Spotify rejects it) and click **Connect Spotify**.
 
 ## Keys
 
@@ -27,6 +46,7 @@ Open **http://127.0.0.1:5173** (not `localhost` — Spotify rejects it).
 
 ## Tips
 
+- Try it on a copy of a playlist first (in Spotify: playlist → ⋯ → Add to other playlist → New playlist).
 - Removals happen immediately. Use Undo, or History → Restore, to put songs back at their original spot.
 - Restore puts a song back at its original position on a best-effort basis: if the playlist was
   edited elsewhere in the meantime, the position may be off.
@@ -35,23 +55,35 @@ Open **http://127.0.0.1:5173** (not `localhost` — Spotify rejects it).
   "date added" can't be kept.
 - If you logged in before Liked Songs support was added, the app asks you to reconnect once so
   Spotify can grant the extra permissions.
-- Try it on a copy of a playlist first (in Spotify: playlist → ⋯ → Add to other playlist → New playlist).
 
-## Development
+## Troubleshooting
 
-    npm test         # unit tests (Vitest)
-    npm run build    # type-check and build into dist/
+**"INVALID_CLIENT: Invalid redirect URI"** — the Redirect URI in your Spotify app's Settings must be
+exactly `http://127.0.0.1:5173/callback`: `http`, not `https`; `127.0.0.1`, not `localhost`; no trailing slash.
 
-- `src/spotify/` — PKCE login, Web API client, Web Playback SDK wrapper
-- `src/core/` — deck shuffling, playlist/position logic, persisted swipe history
-- `src/session/` — swipe session controller (keep, remove, undo, restore)
-- `src/components/`, `src/hooks/` — React UI
+**"User not registered in the Developer Dashboard"** — new Spotify apps are in Development Mode, where
+only allowlisted accounts can log in. Add the Spotify account's email under your app's
+Dashboard → **User Management**.
 
-## Manual checklist
+**"No Spotify Client ID configured"** — run `npm run setup`, then stop `npm start` (Ctrl+C) and start
+it again. The Client ID is only read on startup.
 
-- Include a region-locked or relinked track in the test playlist if you have one.
-- Reload the page right after a left swipe — History must still list the song.
-- Re-add a removed song in the Spotify app, then reopen the playlist here — it must not be
-  listed in History anymore.
-- Liked Songs: swipe a song left, check it is un-liked in Spotify, Restore it from History, and check
-  it is liked again (at the top).
+**The page doesn't load** — `npm start` must keep running in its terminal while you use Swipify.
+Start it again if you closed that window.
+
+**No sound, or the player never shows up** — Spotify Premium is required, and it must be a desktop
+browser. Check that the Spotify app has **Web Playback SDK** ticked in its Settings.
+
+**"Port 5173 is already in use"** — another copy of Swipify (or another dev server) is running.
+Close it first; the port can't change because it's part of the Redirect URI.
+
+**An `EBADENGINE` warning or odd errors during `npm install`** — your Node.js is too old. Install
+the current LTS from https://nodejs.org.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## License
+
+[MIT](LICENSE)
