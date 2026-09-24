@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { ConnectScreen } from './components/ConnectScreen';
 import { PlaylistPicker } from './components/PlaylistPicker';
+import { SwipeScreen } from './components/SwipeScreen';
+import { createHistoryStore } from './core/historyStore';
 import type { PlaylistSummary } from './core/playlists';
 import { createApi } from './spotify/api';
 import { createAuth } from './spotify/auth';
@@ -22,6 +24,16 @@ const api = createApi({
   forceRefresh: () => auth.forceRefresh(),
   fetch: (input, init) => window.fetch(input, init),
 });
+
+const history = createHistoryStore(safeLocalStorage());
+
+function safeLocalStorage(): Storage | null {
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
 
 type Screen =
   | { name: 'loading' }
@@ -77,6 +89,17 @@ export function App() {
         />
       );
     case 'swipe':
-      return <main className="center muted">Loading {screen.playlist.name}…</main>;
+      if (!player) return <main className="center muted">Connecting player…</main>;
+      return (
+        <SwipeScreen
+          key={screen.playlist.id}
+          playlist={screen.playlist}
+          api={api}
+          player={player}
+          history={history}
+          onExit={() => setScreen({ name: 'picker' })}
+          onAuthLost={onAuthLost}
+        />
+      );
   }
 }
