@@ -11,25 +11,30 @@ interface Props {
 }
 
 export function HistoryPanel({ entries, sessionId, note, onRestore, onClose }: Props) {
-  const closeRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLElement>(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
 
   useEffect(() => {
-    // The panel can cover the card: move focus into it, and let Escape close it.
-    closeRef.current?.focus();
+    // The panel can cover the card: move focus into it (the panel itself, not a button,
+    // so Space still toggles playback), let Escape close it, and give focus back after.
+    const previous = document.activeElement as HTMLElement | null;
+    panelRef.current?.focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onCloseRef.current();
     };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      previous?.focus?.();
+    };
   }, []);
 
   return (
-    <aside className="history" aria-label="Removed songs">
+    <aside ref={panelRef} className="history" aria-label="Removed songs" tabIndex={-1}>
       <header>
         <h2>Removed songs</h2>
-        <button ref={closeRef} className="link" onClick={onClose} aria-label="Close">
+        <button className="link" onClick={onClose} aria-label="Close">
           ✕
         </button>
       </header>

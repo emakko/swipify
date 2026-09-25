@@ -36,7 +36,10 @@ export async function restoreEntry(
   const entries = history.load(playlistId);
   const entry = entries.find((e) => e.uri === uri);
   if (!entry) return; // The removal never reached Spotify, so there is nothing to put back.
-  const ours = removedAt === undefined || entry.removedAt === removedAt;
+  // Checked before every History write: the song can be removed again while an insert
+  // is in flight, and that newer entry must survive.
+  const ours = () =>
+    removedAt === undefined || history.load(playlistId).find((e) => e.uri === uri)?.removedAt === removedAt;
   const otherRemoved = entries
     .filter((e) => e.sessionId === entry.sessionId && e.uri !== uri && !unconfirmed?.has(e.uri))
     .flatMap((e) => e.positions);
@@ -45,8 +48,8 @@ export async function restoreEntry(
   for (const [i, index] of indices.entries()) {
     await api.addItems(playlistId, [uri], clampIndex(index, length.current));
     length.current++;
-    if (ours) history.add(playlistId, { ...entry, positions: positions.slice(i + 1) });
+    if (ours()) history.add(playlistId, { ...entry, positions: positions.slice(i + 1) });
     onInserted?.();
   }
-  if (ours) history.remove(playlistId, uri);
+  if (ours()) history.remove(playlistId, uri);
 }

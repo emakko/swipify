@@ -182,6 +182,9 @@ export function createSession(deps: SessionDeps, deck: Deck): SessionController 
 
     restore(uri) {
       if (restoring.has(uri)) return; // e.g. a double click on Restore
+      // Its DELETE hasn't finished: if that fails without being applied, a restore
+      // would add a second copy.
+      if (unconfirmed.has(uri)) return;
       dispatch({ type: 'restored', uri });
       enqueueRestore(uri);
     },

@@ -75,6 +75,8 @@ describe('shortcutFor', () => {
     expect(shortcutFor(key('ArrowLeft'), open)).toBeNull();
     expect(shortcutFor(key('z', { ctrlKey: true }), open)).toBe('undo');
     expect(shortcutFor(key(' '), open)).toBe('toggle');
+    // The open panel itself has focus, not one of its buttons.
+    expect(shortcutFor(key(' ', { target: element('aside') }), open)).toBe('toggle');
   });
 
   it('lets Space press a focused button instead of toggling playback', () => {

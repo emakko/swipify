@@ -337,4 +337,21 @@ describe('createDedupeRun', () => {
     await controller.idle();
     expect(spotify.rows).toEqual(['a2', 'b2', 'a', 'b', 'c']);
   });
+
+  it('undo failing partway, then Restore, puts back only what is still missing', async () => {
+    const playlist = ['a', 'b', 'a2', 'c', 'a2'];
+    const { spotify, controller, ops } = setup([], playlist, { a2: 'a' });
+    controller.start(ops);
+    await controller.idle();
+    expect(spotify.rows).toEqual(['a', 'b', 'c']);
+    const add = spotify.api.addItems.getMockImplementation()!;
+    spotify.api.addItems.mockImplementationOnce(add).mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    controller.undo();
+    await controller.idle();
+    expect(spotify.rows).toEqual(['a', 'b', 'a2', 'c']);
+    controller.restore('a2');
+    await controller.idle();
+    expect(spotify.rows).toEqual(playlist);
+    expect(controller.getSnapshot()).toMatchObject({ removed: 0, history: [] });
+  });
 });

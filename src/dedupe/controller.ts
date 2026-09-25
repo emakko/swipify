@@ -150,6 +150,24 @@ export function createDedupeRun(deps: DedupeDeps): DedupeController {
     }
   }
 
+  /**
+   * Undo put `row` back: drop its position from the song's History entry, so a later
+   * Restore after a failed Undo doesn't add it a second time. Positions are in History's
+   * index space, but ascending, so the row's rank among the song's missing rows picks it.
+   */
+  function trimEntry(row: MissingRow) {
+    const op = ops[next];
+    // A pending copies op's safety entry only covers the kept row; rowBack drops it.
+    if (reAddPending && op?.kind === 'copies' && op.card.uri === row.uri) return;
+    const entry = history.load(playlistId).find((e) => e.uri === row.uri && e.sessionId === runId);
+    const rowsOfSong = missing.filter((r) => r.uri === row.uri);
+    if (!entry || entry.positions.length !== rowsOfSong.length) return;
+    const rank = rowsOfSong.filter((r) => r.index < row.index).length;
+    const positions = [...entry.positions].sort((a, b) => a - b);
+    positions.splice(rank, 1);
+    history.add(playlistId, { ...entry, positions });
+  }
+
   /** Deletes every copy of `card`. Its History entry must already be written. */
   async function removeSong(card: Card) {
     try {
@@ -246,6 +264,7 @@ export function createDedupeRun(deps: DedupeDeps): DedupeController {
           for (const row of rows) {
             await api.addItems(playlistId, [row.uri], clampIndex(row.index, length.current));
             length.current++;
+            trimEntry(row);
             rowBack(row);
             update({ done: snapshot.done + 1 });
           }

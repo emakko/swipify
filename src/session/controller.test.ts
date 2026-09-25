@@ -352,4 +352,38 @@ describe('createSession against a playlist', () => {
     expect(controller.getSnapshot().session.decisions.a).toBe('remove');
     expect(controller.getSnapshot().history.map((e) => e.uri)).toEqual(['a']);
   });
+
+  it('keeps the History entry when the song is removed again while its restore is in flight', async () => {
+    const { spotify, controller } = setupPlaylist(['a', 'b'], ['a', 'b']);
+    controller.remove();
+    await controller.idle();
+    const gate = deferred();
+    const add = spotify.api.addItems.getMockImplementation()!;
+    spotify.api.addItems.mockImplementationOnce(async (...args) => {
+      await gate.promise;
+      return add(...args);
+    });
+    controller.undo();
+    await flush();
+    expect(spotify.api.addItems).toHaveBeenCalledTimes(1); // the restore POST is in flight
+    controller.remove();
+    gate.resolve();
+    await controller.idle();
+    expect(spotify.rows).toEqual(['b']);
+    expect(controller.getSnapshot().history.map((e) => e.uri)).toEqual(['a']);
+    expect(controller.getSnapshot().history[0].positions).toEqual([0]);
+    controller.undo();
+    await controller.idle();
+    expect(spotify.rows).toEqual(['a', 'b']);
+  });
+
+  it('ignores Restore while the song’s own removal is still in flight', async () => {
+    const { spotify, controller } = setupPlaylist(['a', 'b'], ['a', 'b']);
+    spotify.api.removeItems.mockRejectedValueOnce(new TypeError('Failed to fetch')); // DELETE not applied
+    controller.remove();
+    controller.restore('a');
+    await controller.idle();
+    expect(spotify.rows).toEqual(['a', 'b']);
+    expect(spotify.api.addItems).not.toHaveBeenCalled();
+  });
 });
