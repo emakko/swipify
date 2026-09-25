@@ -20,6 +20,21 @@ export interface HistoryStore {
 // Keys keep the app's old name so existing logins and History survive the rename to Swipify.
 const storageKey = (playlistId: string) => `spotify-swipe:history:${playlistId}`;
 
+function isEntry(value: unknown): value is RemovedEntry {
+  const e = value as Partial<RemovedEntry> | null;
+  return (
+    typeof e === 'object' &&
+    e !== null &&
+    typeof e.uri === 'string' &&
+    typeof e.name === 'string' &&
+    Array.isArray(e.artists) &&
+    Array.isArray(e.positions) &&
+    e.positions.every((p) => Number.isInteger(p)) &&
+    typeof e.sessionId === 'string' &&
+    typeof e.removedAt === 'number'
+  );
+}
+
 /**
  * Removal history kept in memory and mirrored to `storage` so it survives reloads.
  * Storage failures are swallowed: the in-memory copy keeps undo/restore working.
@@ -34,7 +49,7 @@ export function createHistoryStore(storage: Storage | null): HistoryStore {
     try {
       const raw = storage?.getItem(storageKey(playlistId));
       const parsed: unknown = raw ? JSON.parse(raw) : [];
-      if (Array.isArray(parsed)) entries = parsed as RemovedEntry[];
+      if (Array.isArray(parsed)) entries = parsed.filter(isEntry);
     } catch {
       // Corrupt or unreadable storage: start with an empty history.
     }

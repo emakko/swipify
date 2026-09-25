@@ -39,6 +39,7 @@ describe('createApi', () => {
       .mockResolvedValueOnce(json({ id: 'me', display_name: null }));
     expect(await api.getMe()).toEqual({ id: 'me', displayName: null });
     expect(forceRefresh).toHaveBeenCalledTimes(1);
+    expect(forceRefresh).toHaveBeenCalledWith('token-1');
     expect(authHeader(fetchMock.mock.calls[1])).toBe('Bearer fresh-token');
   });
 
@@ -57,6 +58,20 @@ describe('createApi', () => {
     await api.getMe();
     expect(sleep).toHaveBeenCalledWith(2000);
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('waits one second when Retry-After is missing', async () => {
+    const { api, fetchMock, sleep } = setup();
+    fetchMock.mockResolvedValueOnce(json({}, 429)).mockResolvedValueOnce(json({ id: 'me', display_name: null }));
+    await api.getMe();
+    expect(sleep).toHaveBeenCalledWith(1000);
+  });
+
+  it('fails at once instead of waiting for a very long Retry-After', async () => {
+    const { api, fetchMock, sleep } = setup();
+    fetchMock.mockResolvedValueOnce(json({}, 429, { 'Retry-After': '3600' }));
+    await expect(api.getMe()).rejects.toMatchObject({ status: 429, message: expect.stringMatching(/60 min/) });
+    expect(sleep).not.toHaveBeenCalled();
   });
 
   it('stops retrying 429 after three attempts', async () => {

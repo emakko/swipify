@@ -36,7 +36,12 @@ function loadSdk(): Promise<void> {
     const script = document.createElement('script');
     script.src = SDK_URL;
     script.async = true;
-    script.onerror = () => reject(new Error('Could not load the Spotify player.'));
+    script.onerror = () => {
+      // Forget the failure so the next player (e.g. after reconnecting) tries again.
+      sdkLoaded = null;
+      script.remove();
+      reject(new Error('Could not load the Spotify player.'));
+    };
     document.body.appendChild(script);
   });
   return sdkLoaded;
@@ -47,6 +52,7 @@ export function createWebPlayer(getToken: () => Promise<string>): WebPlayer {
   const listeners = new Set<() => void>();
   let player: Spotify.Player | null = null;
   let wasActive = false;
+  let disposed = false;
   let snapshot: PlayerSnapshot = {
     deviceId: null,
     ready: false,
@@ -66,6 +72,7 @@ export function createWebPlayer(getToken: () => Promise<string>): WebPlayer {
 
   loadSdk().then(
     () => {
+      if (disposed) return;
       player = new window.Spotify.Player({
         name: 'Swipify',
         volume: 0.8,
@@ -101,7 +108,9 @@ export function createWebPlayer(getToken: () => Promise<string>): WebPlayer {
       player.addListener('playback_error', ({ message }) => update({ error: `Playback error: ${message}` }));
       void player.connect();
     },
-    (error: Error) => update({ error: error.message }),
+    (error: Error) => {
+      if (!disposed) update({ error: error.message });
+    },
   );
 
   return {
@@ -124,6 +133,10 @@ export function createWebPlayer(getToken: () => Promise<string>): WebPlayer {
     seek: async (ms) => {
       await player?.seek(ms);
     },
-    disconnect: () => player?.disconnect(),
+    disconnect: () => {
+      disposed = true;
+      listeners.clear();
+      player?.disconnect();
+    },
   };
 }

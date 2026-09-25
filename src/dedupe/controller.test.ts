@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { collectCards, type RawPlaylistRow } from '../core/deck';
 import { findDuplicates, planRemoval } from '../core/duplicates';
+import { LIKED_SONGS_ID } from '../core/playlists';
 import { createHistoryStore } from '../core/historyStore';
 import { ApiError, AuthError } from '../spotify/errors';
 import { memoryStorage } from '../test/memoryStorage';
@@ -294,5 +295,63 @@ describe('createDedupeRun', () => {
       await controller.idle();
       expect(spotify.rows).toEqual(['a', 'b', 'a2', 'a2']);
     });
+  });
+
+  it('restore failing partway, then Undo, does not add the restored row twice', async () => {
+    const playlist = ['a', 'b', 'a2', 'c', 'a2'];
+    const { spotify, controller, ops } = setup([], playlist, { a2: 'a' });
+    controller.start(ops);
+    await controller.idle();
+    expect(spotify.rows).toEqual(['a', 'b', 'c']);
+    const add = spotify.api.addItems.getMockImplementation()!;
+    spotify.api.addItems.mockImplementationOnce(add).mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    controller.restore('a2');
+    await controller.idle();
+    expect(spotify.rows).toEqual(['a', 'b', 'a2', 'c']);
+    controller.undo();
+    await controller.idle();
+    expect(spotify.rows).toEqual(playlist);
+  });
+
+  it('undo on Liked Songs re-likes songs so they keep their original order on top', async () => {
+    const liked = ['a', 'b', 'a2', 'c', 'b2'];
+    const names = { a2: 'a', b2: 'b' };
+    const spotify = fakeSpotify(liked);
+    // Liked Songs has no positions: a re-liked song goes to the top.
+    spotify.api.addItems.mockImplementation(async (_p: string, uris: string[]) => {
+      spotify.rows.unshift(...uris);
+    });
+    const ops = planRemoval(findDuplicates(collectCards(liked.map(row(names))).cards), new Set());
+    const controller = createDedupeRun({
+      api: spotify.api,
+      history: createHistoryStore(memoryStorage()),
+      playlistId: LIKED_SONGS_ID,
+      runId: 'r1',
+      now: () => 1000,
+      playlistLength: liked.length,
+    });
+    controller.start(ops);
+    await controller.idle();
+    expect(spotify.rows).toEqual(['a', 'b', 'c']);
+    controller.undo();
+    await controller.idle();
+    expect(spotify.rows).toEqual(['a2', 'b2', 'a', 'b', 'c']);
+  });
+
+  it('undo failing partway, then Restore, puts back only what is still missing', async () => {
+    const playlist = ['a', 'b', 'a2', 'c', 'a2'];
+    const { spotify, controller, ops } = setup([], playlist, { a2: 'a' });
+    controller.start(ops);
+    await controller.idle();
+    expect(spotify.rows).toEqual(['a', 'b', 'c']);
+    const add = spotify.api.addItems.getMockImplementation()!;
+    spotify.api.addItems.mockImplementationOnce(add).mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    controller.undo();
+    await controller.idle();
+    expect(spotify.rows).toEqual(['a', 'b', 'a2', 'c']);
+    controller.restore('a2');
+    await controller.idle();
+    expect(spotify.rows).toEqual(playlist);
+    expect(controller.getSnapshot()).toMatchObject({ removed: 0, history: [] });
   });
 });

@@ -1,6 +1,7 @@
 import type { Card } from '../core/deck';
 import { countRemoved, historyPositions, type RemovalOp } from '../core/duplicates';
 import type { HistoryStore, RemovedEntry } from '../core/historyStore';
+import { LIKED_SONGS_ID } from '../core/playlists';
 import { clampIndex } from '../core/positions';
 import { restoreEntry } from '../session/restore';
 import type { SpotifyApi } from '../spotify/api';
@@ -149,6 +150,24 @@ export function createDedupeRun(deps: DedupeDeps): DedupeController {
     }
   }
 
+  /**
+   * Undo put `row` back: drop its position from the song's History entry, so a later
+   * Restore after a failed Undo doesn't add it a second time. Positions are in History's
+   * index space, but ascending, so the row's rank among the song's missing rows picks it.
+   */
+  function trimEntry(row: MissingRow) {
+    const op = ops[next];
+    // A pending copies op's safety entry only covers the kept row; rowBack drops it.
+    if (reAddPending && op?.kind === 'copies' && op.card.uri === row.uri) return;
+    const entry = history.load(playlistId).find((e) => e.uri === row.uri && e.sessionId === runId);
+    const rowsOfSong = missing.filter((r) => r.uri === row.uri);
+    if (!entry || entry.positions.length !== rowsOfSong.length) return;
+    const rank = rowsOfSong.filter((r) => r.index < row.index).length;
+    const positions = [...entry.positions].sort((a, b) => a - b);
+    positions.splice(rank, 1);
+    history.add(playlistId, { ...entry, positions });
+  }
+
   /** Deletes every copy of `card`. Its History entry must already be written. */
   async function removeSong(card: Card) {
     try {
@@ -236,12 +255,16 @@ export function createDedupeRun(deps: DedupeDeps): DedupeController {
       const before = { phase: snapshot.phase, total: snapshot.total };
       enqueue(async () => {
         // In ascending order, every earlier row is back, so each original index is right.
-        const rows = [...missing].sort((a, b) => a.index - b.index);
+        // Liked Songs ignores positions and puts each re-liked song on top, so go in
+        // descending order there to keep the songs' original order.
+        const direction = playlistId === LIKED_SONGS_ID ? -1 : 1;
+        const rows = [...missing].sort((a, b) => direction * (a.index - b.index));
         update({ phase: 'undoing', done: 0, total: rows.length, error: null });
         try {
           for (const row of rows) {
             await api.addItems(playlistId, [row.uri], clampIndex(row.index, length.current));
             length.current++;
+            trimEntry(row);
             rowBack(row);
             update({ done: snapshot.done + 1 });
           }
@@ -263,10 +286,19 @@ export function createDedupeRun(deps: DedupeDeps): DedupeController {
         const rows: MissingRow[] =
           reAddPending && op?.kind === 'copies' && op.card.uri === uri
             ? [{ uri, index: op.keep }]
-            : missing.filter((row) => row.uri === uri);
-        await restoreEntry({ api, history, playlistId }, uri, length);
-        rows.forEach(rowBack);
-        update({});
+            : missing.filter((row) => row.uri === uri).sort((a, b) => a.index - b.index);
+        // Rows go back one at a time, so a failure partway doesn't leave a re-added
+        // row in `missing` for Undo to add a second time.
+        let back = 0;
+        const onInserted = () => {
+          const row = rows[back++];
+          if (row) rowBack(row);
+        };
+        try {
+          await restoreEntry({ api, history, playlistId }, uri, length, { onInserted });
+        } finally {
+          update({});
+        }
       });
     },
 

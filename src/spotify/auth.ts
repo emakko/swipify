@@ -54,7 +54,8 @@ export interface Auth {
   login(): Promise<void>;
   handleCallback(search: string): Promise<void>;
   getAccessToken(): Promise<string>;
-  forceRefresh(): Promise<string>;
+  /** Refresh after Spotify rejected `rejectedToken`, unless it was already replaced. */
+  forceRefresh(rejectedToken?: string): Promise<string>;
   logout(): void;
 }
 
@@ -62,6 +63,8 @@ export interface Auth {
 export function createAuth(deps: AuthDeps): Auth {
   const { storage } = deps;
   let refreshing: Promise<string> | null = null;
+  /** Bumped by logout, so a refresh still in flight does not save its tokens afterwards. */
+  let generation = 0;
 
   function readTokens(): Tokens | null {
     try {
@@ -100,12 +103,20 @@ export function createAuth(deps: AuthDeps): Auth {
     refreshing ??= (async () => {
       const tokens = readTokens();
       if (!tokens?.refreshToken) throw new AuthError('Not logged in');
+      const startedIn = generation;
       try {
         const response = await requestToken({ grant_type: 'refresh_token', refresh_token: tokens.refreshToken });
+        if (startedIn !== generation) throw new AuthError('Not logged in');
         return saveTokens(response, tokens).accessToken;
       } catch (error) {
+        if (!(error instanceof AuthError)) throw error;
+        // Another tab may have rotated the refresh token first: use its tokens instead.
+        const current = readTokens();
+        if (startedIn === generation && current?.refreshToken && current.refreshToken !== tokens.refreshToken) {
+          return current.accessToken;
+        }
         // Only a rejected refresh token means the login is gone; network errors are retryable.
-        if (error instanceof AuthError) storage.removeItem(TOKENS_KEY);
+        if (current?.refreshToken === tokens.refreshToken) storage.removeItem(TOKENS_KEY);
         throw error;
       }
     })().finally(() => {
@@ -152,7 +163,11 @@ export function createAuth(deps: AuthDeps): Auth {
       if (denied) throw new AuthError(`Spotify login was cancelled (${denied}).`);
       const code = params.get('code');
       const verifier = storage.getItem(VERIFIER_KEY);
-      if (!code || !verifier || params.get('state') !== storage.getItem(STATE_KEY)) {
+      const state = storage.getItem(STATE_KEY);
+      // Each login attempt's verifier and state are single-use, whatever the outcome.
+      storage.removeItem(VERIFIER_KEY);
+      storage.removeItem(STATE_KEY);
+      if (!code || !verifier || !state || params.get('state') !== state) {
         throw new AuthError('The login response did not match. Please try again.');
       }
       const response = await requestToken({
@@ -162,8 +177,6 @@ export function createAuth(deps: AuthDeps): Auth {
         code_verifier: verifier,
       });
       saveTokens(response);
-      storage.removeItem(VERIFIER_KEY);
-      storage.removeItem(STATE_KEY);
     },
 
     async getAccessToken() {
@@ -173,10 +186,18 @@ export function createAuth(deps: AuthDeps): Auth {
       return refresh();
     },
 
-    forceRefresh: refresh,
+    async forceRefresh(rejectedToken) {
+      const tokens = readTokens();
+      // A concurrent request already swapped the rejected token for a new one.
+      if (rejectedToken && tokens && tokens.accessToken !== rejectedToken) return tokens.accessToken;
+      return refresh();
+    },
 
     logout() {
+      generation++;
       storage.removeItem(TOKENS_KEY);
+      storage.removeItem(VERIFIER_KEY);
+      storage.removeItem(STATE_KEY);
     },
   };
 }
