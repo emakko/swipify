@@ -4,10 +4,12 @@ import { ApiError, AuthError } from './errors';
 
 const BASE = 'https://api.spotify.com/v1';
 const MAX_RATE_LIMIT_RETRIES = 3;
+/** Longer Retry-After waits fail instead of leaving the UI hanging. */
+const MAX_RETRY_AFTER_S = 30;
 
 export interface ApiDeps {
   getAccessToken: () => Promise<string>;
-  forceRefresh: () => Promise<string>;
+  forceRefresh: (rejectedToken: string) => Promise<string>;
   fetch: typeof fetch;
   sleep?: (ms: number) => Promise<void>;
 }
@@ -73,13 +75,19 @@ export function createApi(deps: ApiDeps): SpotifyApi {
 
       if (res.status === 401) {
         if (refreshed) throw new AuthError();
-        token = await deps.forceRefresh();
+        token = await deps.forceRefresh(token);
         refreshed = true;
         continue;
       }
-      if (res.status === 429 && attempt < MAX_RATE_LIMIT_RETRIES) {
-        await sleep((Number(res.headers.get('Retry-After')) || 1) * 1000);
-        continue;
+      if (res.status === 429) {
+        const retryAfter = Number(res.headers.get('Retry-After')) || 1;
+        if (retryAfter > MAX_RETRY_AFTER_S) {
+          throw new ApiError(429, `Too many requests — try again in ${Math.ceil(retryAfter / 60)} min.`);
+        }
+        if (attempt < MAX_RATE_LIMIT_RETRIES) {
+          await sleep(retryAfter * 1000);
+          continue;
+        }
       }
 
       const text = await res.text();

@@ -266,3 +266,90 @@ describe('createSession', () => {
     expect(controller.getSnapshot().error).toBeNull();
   });
 });
+
+/** A playlist "on Spotify" that the fake API edits the way the real one does. */
+function fakeSpotify(initial: string[]) {
+  const rows = [...initial];
+  const api = {
+    removeItems: vi.fn(async (_playlistId: string, uris: string[]) => {
+      for (let i = rows.length - 1; i >= 0; i--) if (uris.includes(rows[i])) rows.splice(i, 1);
+    }),
+    addItems: vi.fn(async (_playlistId: string, uris: string[], position: number) => {
+      rows.splice(position, 0, ...uris);
+    }),
+  };
+  return { rows, api };
+}
+
+/** Deck in the order of `order`, over `playlist`; the clock ticks on every call. */
+function setupPlaylist(playlist: string[], order: string[]) {
+  const spotify = fakeSpotify(playlist);
+  const history = createHistoryStore(memoryStorage());
+  const positions = (uri: string) => playlist.flatMap((u, i) => (u === uri ? [i] : []));
+  const deck: Deck = { cards: order.map((uri) => card(uri, positions(uri))), skipped: 0, totalRows: playlist.length };
+  let clock = 1000;
+  const controller = createSession(
+    { api: spotify.api, history, playlistId: 'pl', sessionId: 's1', now: () => clock++ },
+    deck,
+  );
+  return { spotify, controller };
+}
+
+describe('createSession against a playlist', () => {
+  it('keeps the History entry when a song is removed again right after undo', async () => {
+    const { spotify, controller } = setupPlaylist(['a', 'b'], ['a', 'b']);
+    controller.remove();
+    await controller.idle();
+    controller.undo();
+    controller.remove(); // before the restore has run
+    await controller.idle();
+    expect(spotify.rows).toEqual(['b']);
+    expect(controller.getSnapshot().session.decisions.a).toBe('remove');
+    expect(controller.getSnapshot().history.map((e) => e.uri)).toEqual(['a']);
+    controller.undo();
+    await controller.idle();
+    expect(spotify.rows).toEqual(['a', 'b']);
+  });
+
+  it('does not count a removal that is still queued when restoring another song', async () => {
+    const { spotify, controller } = setupPlaylist(['x', 'b', 'y', 'a'], ['a', 'b', 'x', 'y']);
+    controller.remove();
+    await controller.idle();
+    controller.restore('a');
+    controller.remove(); // b, queued behind the restore
+    await controller.idle();
+    expect(spotify.rows).toEqual(['x', 'y', 'a']);
+  });
+
+  it('does not add a copy twice when an undo fails partway and is retried', async () => {
+    const { spotify, controller } = setupPlaylist(['a', 'b', 'a'], ['a', 'b']);
+    controller.remove();
+    await controller.idle();
+    expect(spotify.rows).toEqual(['b']);
+    const addOnce = spotify.api.addItems.getMockImplementation()!;
+    spotify.api.addItems.mockImplementationOnce(addOnce).mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    controller.undo();
+    await controller.idle();
+    expect(spotify.rows).toEqual(['a', 'b']);
+    expect(controller.getSnapshot().session.decisions.a).toBe('remove');
+    expect(controller.getSnapshot().history[0].positions).toEqual([2]);
+    controller.undo();
+    await controller.idle();
+    expect(spotify.rows).toEqual(['a', 'b', 'a']);
+    expect(controller.getSnapshot().history).toEqual([]);
+  });
+
+  it('ignores a second Restore click while the first is still queued', async () => {
+    const { spotify, controller } = setupPlaylist(['a', 'b'], ['a', 'b']);
+    controller.remove();
+    await controller.idle();
+    spotify.api.addItems.mockRejectedValueOnce(new ApiError(403, 'Forbidden'));
+    controller.restore('a');
+    controller.restore('a');
+    await controller.idle();
+    expect(spotify.api.addItems).toHaveBeenCalledTimes(1);
+    expect(spotify.rows).toEqual(['b']);
+    expect(controller.getSnapshot().session.decisions.a).toBe('remove');
+    expect(controller.getSnapshot().history.map((e) => e.uri)).toEqual(['a']);
+  });
+});

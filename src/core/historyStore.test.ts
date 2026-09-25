@@ -49,6 +49,21 @@ describe('createHistoryStore', () => {
     expect(createHistoryStore(storage).load('p1')).toEqual([]);
   });
 
+  it('drops malformed stored entries instead of failing', () => {
+    const storage = memoryStorage();
+    storage.setItem('spotify-swipe:history:pl', JSON.stringify([null, { uri: 'x' }, 'junk', entry('a')]));
+    const store = createHistoryStore(storage);
+    expect(store.load('pl')).toEqual([entry('a')]);
+    store.add('pl', entry('b', 2));
+    expect(store.load('pl').map((e) => e.uri)).toEqual(['b', 'a']);
+  });
+
+  it('treats stored JSON that is not a list as empty', () => {
+    const storage = memoryStorage();
+    storage.setItem('spotify-swipe:history:pl', '{"uri":"a"}');
+    expect(createHistoryStore(storage).load('pl')).toEqual([]);
+  });
+
   it('keeps working in memory when storage writes fail', () => {
     const storage = memoryStorage();
     storage.setItem = () => {

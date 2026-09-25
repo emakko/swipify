@@ -37,4 +37,46 @@ describe('restoreEntry', () => {
     await restoreEntry({ api, history: createHistoryStore(memoryStorage()), playlistId: 'pl' }, 'a', { current: 0 });
     expect(api.addItems).not.toHaveBeenCalled();
   });
+
+  it('trims the entry after each insert, so a retry after a failure does not add a copy twice', async () => {
+    const history = createHistoryStore(memoryStorage());
+    history.add('pl', entry('a', [0, 2]));
+    const api = { addItems: vi.fn(async (_p: string, _uris: string[], _position: number) => {}) };
+    api.addItems.mockResolvedValueOnce().mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    const length = { current: 1 };
+
+    await expect(restoreEntry({ api, history, playlistId: 'pl' }, 'a', length)).rejects.toThrow();
+    expect(length.current).toBe(2);
+    expect(history.load('pl')[0].positions).toEqual([2]);
+
+    await restoreEntry({ api, history, playlistId: 'pl' }, 'a', length);
+    expect(api.addItems).toHaveBeenLastCalledWith('pl', ['a'], 2);
+    expect(history.load('pl')).toEqual([]);
+  });
+
+  it('inserts positions given out of order in ascending order', async () => {
+    const history = createHistoryStore(memoryStorage());
+    history.add('pl', entry('a', [5, 1]));
+    const api = { addItems: vi.fn(async (_p: string, _uris: string[], _position: number) => {}) };
+    await restoreEntry({ api, history, playlistId: 'pl' }, 'a', { current: 10 });
+    expect(api.addItems.mock.calls.map((call) => call[2])).toEqual([1, 5]);
+  });
+
+  it('does not count songs whose removal is still queued', async () => {
+    const history = createHistoryStore(memoryStorage());
+    history.add('pl', entry('a', [3]));
+    history.add('pl', entry('b', [1]));
+    const api = { addItems: vi.fn(async (_p: string, _uris: string[], _position: number) => {}) };
+    await restoreEntry({ api, history, playlistId: 'pl' }, 'a', { current: 3 }, { unconfirmed: new Set(['b']) });
+    expect(api.addItems).toHaveBeenCalledWith('pl', ['a'], 3);
+  });
+
+  it('puts the song back but keeps a newer entry written since the restore was asked for', async () => {
+    const history = createHistoryStore(memoryStorage());
+    history.add('pl', { ...entry('a', [0]), removedAt: 2 });
+    const api = { addItems: vi.fn(async (_p: string, _uris: string[], _position: number) => {}) };
+    await restoreEntry({ api, history, playlistId: 'pl' }, 'a', { current: 1 }, { removedAt: 1 });
+    expect(api.addItems).toHaveBeenCalledTimes(1);
+    expect(history.load('pl')).toEqual([{ ...entry('a', [0]), removedAt: 2 }]);
+  });
 });

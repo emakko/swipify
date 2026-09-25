@@ -185,7 +185,7 @@ function DedupeView({
           <div className="empty">
             <h2>No duplicates in {playlist.name}</h2>
             <p className="muted">Every song appears once.</p>
-            <button className="primary" onClick={onExit}>
+            <button className="primary" onClick={onExit} disabled={snap.busy}>
               Back to playlists
             </button>
           </div>

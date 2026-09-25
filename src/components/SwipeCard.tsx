@@ -1,10 +1,8 @@
 import { motion, useMotionValue, useTransform, type PanInfo } from 'motion/react';
 import type { Card } from '../core/deck';
+import { SWIPE_DISTANCE, swipeIntent, type SwipeDirection } from './gestures';
 
-export type SwipeDirection = 'keep' | 'remove';
-
-const SWIPE_DISTANCE = 120;
-const SWIPE_VELOCITY = 600;
+export type { SwipeDirection } from './gestures';
 
 const variants = {
   enter: { scale: 0.95, opacity: 0 },
@@ -29,8 +27,8 @@ export function SwipeCard({ card, direction, onSwipe }: Props) {
   const removeOpacity = useTransform(x, [-SWIPE_DISTANCE, -30], [1, 0]);
 
   const onDragEnd = (_event: unknown, info: PanInfo) => {
-    if (info.offset.x > SWIPE_DISTANCE || info.velocity.x > SWIPE_VELOCITY) onSwipe('keep');
-    else if (info.offset.x < -SWIPE_DISTANCE || info.velocity.x < -SWIPE_VELOCITY) onSwipe('remove');
+    const intent = swipeIntent(info.offset.x, info.velocity.x);
+    if (intent) onSwipe(intent);
   };
 
   return (

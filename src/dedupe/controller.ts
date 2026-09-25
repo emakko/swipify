@@ -1,6 +1,7 @@
 import type { Card } from '../core/deck';
 import { countRemoved, historyPositions, type RemovalOp } from '../core/duplicates';
 import type { HistoryStore, RemovedEntry } from '../core/historyStore';
+import { LIKED_SONGS_ID } from '../core/playlists';
 import { clampIndex } from '../core/positions';
 import { restoreEntry } from '../session/restore';
 import type { SpotifyApi } from '../spotify/api';
@@ -236,7 +237,10 @@ export function createDedupeRun(deps: DedupeDeps): DedupeController {
       const before = { phase: snapshot.phase, total: snapshot.total };
       enqueue(async () => {
         // In ascending order, every earlier row is back, so each original index is right.
-        const rows = [...missing].sort((a, b) => a.index - b.index);
+        // Liked Songs ignores positions and puts each re-liked song on top, so go in
+        // descending order there to keep the songs' original order.
+        const direction = playlistId === LIKED_SONGS_ID ? -1 : 1;
+        const rows = [...missing].sort((a, b) => direction * (a.index - b.index));
         update({ phase: 'undoing', done: 0, total: rows.length, error: null });
         try {
           for (const row of rows) {
@@ -263,10 +267,19 @@ export function createDedupeRun(deps: DedupeDeps): DedupeController {
         const rows: MissingRow[] =
           reAddPending && op?.kind === 'copies' && op.card.uri === uri
             ? [{ uri, index: op.keep }]
-            : missing.filter((row) => row.uri === uri);
-        await restoreEntry({ api, history, playlistId }, uri, length);
-        rows.forEach(rowBack);
-        update({});
+            : missing.filter((row) => row.uri === uri).sort((a, b) => a.index - b.index);
+        // Rows go back one at a time, so a failure partway doesn't leave a re-added
+        // row in `missing` for Undo to add a second time.
+        let back = 0;
+        const onInserted = () => {
+          const row = rows[back++];
+          if (row) rowBack(row);
+        };
+        try {
+          await restoreEntry({ api, history, playlistId }, uri, length, { onInserted });
+        } finally {
+          update({});
+        }
       });
     },
 

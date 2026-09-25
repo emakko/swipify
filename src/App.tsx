@@ -8,6 +8,7 @@ import { createHistoryStore } from './core/historyStore';
 import type { PlaylistSummary } from './core/playlists';
 import { createApi } from './spotify/api';
 import { createAuth } from './spotify/auth';
+import { describeError } from './spotify/errors';
 import { createWebPlayer, type WebPlayer } from './spotify/player';
 
 const CLIENT_ID = import.meta.env.VITE_SPOTIFY_CLIENT_ID ?? '';
@@ -23,7 +24,7 @@ const auth = createAuth({
 
 const api = createApi({
   getAccessToken: () => auth.getAccessToken(),
-  forceRefresh: () => auth.forceRefresh(),
+  forceRefresh: (rejectedToken) => auth.forceRefresh(rejectedToken),
   fetch: (input, init) => window.fetch(input, init),
 });
 
@@ -108,7 +109,15 @@ export function App() {
         </main>
       );
     case 'connect':
-      return <ConnectScreen clientIdMissing={!CLIENT_ID} error={screen.error} onConnect={() => void auth.login()} />;
+      return (
+        <ConnectScreen
+          clientIdMissing={!CLIENT_ID}
+          error={screen.error}
+          onConnect={() =>
+            auth.login().catch((e: unknown) => setScreen({ name: 'connect', error: describeError(e) }))
+          }
+        />
+      );
     case 'picker':
       return (
         <PlaylistPicker

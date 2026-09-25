@@ -1,3 +1,4 @@
+import { MotionConfig } from 'motion/react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import './styles.css';
@@ -9,5 +10,9 @@ if (location.hostname === 'localhost') {
 } else {
   // No StrictMode: its double-run effects would redeem the one-time login code twice
   // and create two Spotify players.
-  createRoot(document.getElementById('root')!).render(<App />);
+  createRoot(document.getElementById('root')!).render(
+    <MotionConfig reducedMotion="user">
+      <App />
+    </MotionConfig>,
+  );
 }

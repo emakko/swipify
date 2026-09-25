@@ -93,9 +93,78 @@ describe('getAccessToken', () => {
     expect(auth.isLoggedIn()).toBe(true);
   });
 
+  it('keeps another tab’s rotated tokens when its own refresh is rejected', async () => {
+    const { auth, storage, fetchMock } = setup();
+    storeTokens(storage, NOW);
+    fetchMock.mockImplementationOnce(async () => {
+      // Another tab refreshed first and rotated the refresh token.
+      storage.setItem(
+        TOKENS_KEY,
+        JSON.stringify({ accessToken: 'tab-access', refreshToken: 'tab-refresh', expiresAt: NOW + 3_600_000, scopes: SCOPES }),
+      );
+      return json({ error: 'invalid_grant' }, 400);
+    });
+    expect(await auth.getAccessToken()).toBe('tab-access');
+    expect(auth.isLoggedIn()).toBe(true);
+  });
+
+  it('stays logged out when logout happens during a refresh', async () => {
+    const { auth, storage, fetchMock } = setup();
+    storeTokens(storage, NOW);
+    let respond!: (res: Response) => void;
+    fetchMock.mockReturnValueOnce(new Promise((resolve) => (respond = resolve)));
+    const pending = auth.getAccessToken();
+    auth.logout();
+    respond(json({ access_token: 'new-access', expires_in: 3600 }));
+    await expect(pending).rejects.toBeInstanceOf(AuthError);
+    expect(storage.getItem(TOKENS_KEY)).toBeNull();
+  });
+
+  it('refreshes again after an earlier refresh has settled', async () => {
+    const { auth, storage, fetchMock } = setup();
+    storeTokens(storage, NOW);
+    fetchMock
+      .mockResolvedValueOnce(json({ access_token: 'a1', expires_in: 0 }))
+      .mockResolvedValueOnce(json({ access_token: 'a2', expires_in: 3600 }));
+    expect(await auth.getAccessToken()).toBe('a1');
+    expect(await auth.getAccessToken()).toBe('a2');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('stays logged in when the token endpoint fails with a server error', async () => {
+    const { auth, storage, fetchMock } = setup();
+    storeTokens(storage, NOW);
+    fetchMock.mockResolvedValueOnce(json({}, 500));
+    await expect(auth.getAccessToken()).rejects.toMatchObject({ status: 500 });
+    expect(auth.isLoggedIn()).toBe(true);
+  });
+
+  it('treats corrupt stored tokens as logged out', async () => {
+    const { auth, storage } = setup();
+    storage.setItem(TOKENS_KEY, '{not json');
+    expect(auth.isLoggedIn()).toBe(false);
+    await expect(auth.getAccessToken()).rejects.toBeInstanceOf(AuthError);
+  });
+
   it('rejects with AuthError when not logged in', async () => {
     const { auth } = setup();
     await expect(auth.getAccessToken()).rejects.toBeInstanceOf(AuthError);
+  });
+});
+
+describe('forceRefresh', () => {
+  it('refreshes even while the stored token looks valid', async () => {
+    const { auth, storage, fetchMock } = setup();
+    storeTokens(storage, NOW + 3_600_000);
+    fetchMock.mockResolvedValueOnce(json({ access_token: 'new-access', expires_in: 3600 }));
+    expect(await auth.forceRefresh('old-access')).toBe('new-access');
+  });
+
+  it('returns the current token when the rejected one was already replaced', async () => {
+    const { auth, storage, fetchMock } = setup();
+    storeTokens(storage, NOW + 3_600_000);
+    expect(await auth.forceRefresh('older-access')).toBe('old-access');
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
 
@@ -129,6 +198,7 @@ describe('login and callback', () => {
     expect(body.get('redirect_uri')).toBe('http://127.0.0.1:5173/callback');
     expect(auth.isLoggedIn()).toBe(true);
     expect(storage.getItem('spotify-swipe:verifier')).toBeNull();
+    expect(storage.getItem('spotify-swipe:state')).toBeNull();
   });
 
   it('rejects a callback whose state does not match', async () => {
@@ -136,6 +206,30 @@ describe('login and callback', () => {
     storage.setItem('spotify-swipe:verifier', 'verifier-abc');
     storage.setItem('spotify-swipe:state', 'state-xyz');
     await expect(auth.handleCallback('?code=c&state=evil')).rejects.toBeInstanceOf(AuthError);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects a callback when no state was stored or returned', async () => {
+    const { auth, storage, fetchMock } = setup();
+    storage.setItem('spotify-swipe:verifier', 'verifier-abc');
+    await expect(auth.handleCallback('?code=c')).rejects.toBeInstanceOf(AuthError);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('forgets the verifier and state after a rejected callback', async () => {
+    const { auth, storage } = setup();
+    storage.setItem('spotify-swipe:verifier', 'verifier-abc');
+    storage.setItem('spotify-swipe:state', 'state-xyz');
+    await expect(auth.handleCallback('?code=c&state=evil')).rejects.toBeInstanceOf(AuthError);
+    expect(storage.getItem('spotify-swipe:verifier')).toBeNull();
+    expect(storage.getItem('spotify-swipe:state')).toBeNull();
+  });
+
+  it('rejects a callback without a code', async () => {
+    const { auth, storage, fetchMock } = setup();
+    storage.setItem('spotify-swipe:verifier', 'verifier-abc');
+    storage.setItem('spotify-swipe:state', 'state-xyz');
+    await expect(auth.handleCallback('?state=state-xyz')).rejects.toBeInstanceOf(AuthError);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 

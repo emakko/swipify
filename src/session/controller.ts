@@ -52,6 +52,10 @@ export function createSession(deps: SessionDeps, deck: Deck): SessionController 
   const length = { current: deck.totalRows };
   let pending = 0;
   let queue: Promise<void> = Promise.resolve();
+  /** Songs whose DELETE is queued or in flight. */
+  const unconfirmed = new Set<string>();
+  /** Songs with a restore queued or in flight. */
+  const restoring = new Set<string>();
 
   // The song is back in the playlist, so it is no longer removed: drop any history
   // entry left over from a session that removed it, before it can be shown as
@@ -92,18 +96,23 @@ export function createSession(deps: SessionDeps, deck: Deck): SessionController 
       });
   }
 
-  async function restoreOnSpotify(uri: string) {
-    await restoreEntry({ api, history, playlistId }, uri, length);
-    update({ history: history.load(playlistId) });
-  }
-
-  async function restoreWithRollback(uri: string) {
-    try {
-      await restoreOnSpotify(uri);
-    } catch (error) {
-      dispatch({ type: 'restoreFailed', uri });
-      throw error;
-    }
+  function enqueueRestore(uri: string) {
+    // Captured now: a remove() of the same song queued behind this restore writes a
+    // newer entry, which must stay in History.
+    const removedAt = history.load(playlistId).find((e) => e.uri === uri)?.removedAt;
+    if (removedAt === undefined) return; // The removal never reached Spotify.
+    restoring.add(uri);
+    enqueue(async () => {
+      try {
+        await restoreEntry({ api, history, playlistId }, uri, length, { removedAt, unconfirmed });
+      } catch (error) {
+        dispatch({ type: 'restoreFailed', uri });
+        throw error;
+      } finally {
+        restoring.delete(uri);
+        update({ history: history.load(playlistId) });
+      }
+    });
   }
 
   return {
@@ -137,6 +146,7 @@ export function createSession(deps: SessionDeps, deck: Deck): SessionController 
         removedAt: now(),
       });
       update({ history: history.load(playlistId) });
+      unconfirmed.add(card.uri);
       enqueue(async () => {
         try {
           await api.removeItems(playlistId, [card.uri]);
@@ -154,6 +164,8 @@ export function createSession(deps: SessionDeps, deck: Deck): SessionController 
           throw new Error(
             `Couldn't confirm the removal of "${card.name}" — if it went through, you can restore it from History.`,
           );
+        } finally {
+          unconfirmed.delete(card.uri);
         }
         length.current -= card.positions.length;
       });
@@ -165,12 +177,13 @@ export function createSession(deps: SessionDeps, deck: Deck): SessionController 
       const last = snapshot.session.undoStack[snapshot.session.undoStack.length - 1];
       if (!last) return;
       dispatch({ type: 'undo' });
-      if (last.decision === 'remove') enqueue(() => restoreWithRollback(last.uri));
+      if (last.decision === 'remove') enqueueRestore(last.uri);
     },
 
     restore(uri) {
+      if (restoring.has(uri)) return; // e.g. a double click on Restore
       dispatch({ type: 'restored', uri });
-      enqueue(() => restoreWithRollback(uri));
+      enqueueRestore(uri);
     },
 
     dismissError: () => update({ error: null }),

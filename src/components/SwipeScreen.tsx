@@ -11,6 +11,7 @@ import type { SpotifyApi } from '../spotify/api';
 import { AuthError, describeError } from '../spotify/errors';
 import type { WebPlayer } from '../spotify/player';
 import { DoneScreen } from './DoneScreen';
+import { shortcutFor } from './gestures';
 import { HistoryPanel } from './HistoryPanel';
 import { Loading } from './Loading';
 import { PlayerControls } from './PlayerControls';
@@ -123,23 +124,15 @@ function SwipeView({
   useEffect(() => {
     if (!started) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.repeat || e.target instanceof HTMLInputElement) return;
-      // While the History panel is open it can cover the card at narrow widths, so
-      // ←/→ must not remove or keep a song the user can't see. Undo and Space still work.
-      if (e.key === 'ArrowRight') {
-        if (!showHistory) swipe('keep');
-      } else if (e.key === 'ArrowLeft') {
-        if (!showHistory) swipe('remove');
-      } else if (e.key === ' ') {
-        e.preventDefault();
-        // Only the current card's own playback should toggle: on an unplayable card or
-        // the Done screen the SDK still holds the previous track, so togglePlay would
-        // resume that instead.
-        if (card?.isPlayable) void player.togglePlay();
-      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
-        e.preventDefault();
-        controller.undo();
-      }
+      const shortcut = shortcutFor(e, { historyOpen: showHistory });
+      if (!shortcut) return;
+      e.preventDefault();
+      if (shortcut === 'keep' || shortcut === 'remove') swipe(shortcut);
+      else if (shortcut === 'undo') controller.undo();
+      // Only the current card's own playback should toggle: on an unplayable card or
+      // the Done screen the SDK still holds the previous track, so togglePlay would
+      // resume that instead.
+      else if (card?.isPlayable) void player.togglePlay();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
